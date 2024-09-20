@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YouTube Playlist Fetcher</title>
+    <style>
+      .rating-options {
+        display: none;
+        margin-top: 10px;
+      }
+      .rating-options button {
+        margin: 5px;
+        padding: 10px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+      #playerContainer {
+        display: block;
+      }
+      .play-button {
+        display: inline;
+        margin-left: .5rem;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Fetch YouTube Playlist Videos</h1>
+    <input type="text" id="apiKey" placeholder="Enter YouTube API Key" />
+    <br />
+
+    <input type="text" id="playlistId" placeholder="Enter Playlist ID" />
+    <button onclick="fetchAndDisplayVideosViaPlaylistId()">Fetch Videos</button>
+    <button onclick="continueLastSessionAndDisplayVideos()">
+      Load last session
+    </button>
+
+    <button onclick="shufflePlaylist()">Shuffle Playlist</button>
+
+    <label>
+      <input type="checkbox" id="skipRatedCheckbox" checked /> Skip already
+      rated videos
+    </label>
+    <label>
+      <input type="checkbox" id="skipOnError" checked /> Skip on error
+    </label>
+    <br />
+
+    <label for="ratingFilter">Filter by Rating:</label>
+    <select id="ratingFilter">
+      <option value="">All</option>
+      <option value="S">S</option>
+      <option value="A">A</option>
+      <option value="B">B</option>
+      <option value="C">C</option>
+      <option value="D">D</option>
+      <option value="F">F</option>
+    </select>
+
+    <label>
+      <input type="checkbox" id="ratingGreaterEqualCheckbox" /> Include greater
+      or equal ratings
+    </label>
+
+    <h2>First Video</h2>
+    <div id="playerContainer">
+      <!-- YouTube iframe will be inserted here -->
+    </div>
+
+    <div class="rating-options" id="ratingOptions">
+      <button onclick="playPreviousVideo()">Previous Video</button>
+
+      <button onclick="rateVideo('S')">S</button>
+      <button onclick="rateVideo('A')">A</button>
+      <button onclick="rateVideo('B')">B</button>
+      <button onclick="rateVideo('C')">C</button>
+      <button onclick="rateVideo('D')">D</button>
+      <button onclick="rateVideo('F')">F</button>
+    </div>
+
+    <h2>Import/Export</h2>
+    <button onclick="downloadPlaylistAsJSON()">Export</button>
+    <input
+      type="file"
+      id="jsonFileInput"
+      accept=".json"
+      onchange="loadJSONFile(event)"
+    />
+
+    <ul id="videoList"></ul>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="index.js"></script>
+    </script>
+  </body>
+</html>
