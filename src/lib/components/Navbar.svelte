@@ -30,21 +30,26 @@
 	</Button>
 {/snippet}
 
-<nav
-	class="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6"
->
-	{#each navs as { href, text }}
-		{@const active = href === '/' ? routeId === '/' : url.includes(href)}
-		<a
-			{href}
-			class="{active
-				? 'text-foreground'
-				: 'text-muted-foreground'} transition-colors hover:text-foreground"
-		>
-			{text}
-		</a>
-	{/each}
-	{@render themeToggle()}
+<!-- class="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6" -->
+<nav class=" hidden md:container md:flex md:max-w-screen-2xl md:px-0">
+	<div
+		class="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6"
+	>
+		{#each navs as { href, text }}
+			{@const active = href === '/' ? routeId === '/' : url.includes(href)}
+			<a
+				{href}
+				class="{active
+					? 'text-foreground'
+					: 'text-muted-foreground'} transition-colors hover:text-foreground"
+			>
+				{text}
+			</a>
+		{/each}
+	</div>
+	<div class="hidden md:flex md:flex-1 md:items-center md:justify-end md:space-x-2">
+		{@render themeToggle()}
+	</div>
 </nav>
 <Sheet.Root>
 	<Sheet.Trigger asChild let:builder>
