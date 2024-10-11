@@ -53,7 +53,7 @@
 {#snippet dummy()}
 	<div role="status" class="flex h-full w-full items-center justify-center rounded-xl border">
 		<svg
-			class="h-10 w-10 animate-pulse text-secondary"
+			class="light:fg-current h-10 w-10 animate-pulse dark:text-secondary"
 			aria-hidden="true"
 			xmlns="http://www.w3.org/2000/svg"
 			fill="currentColor"
