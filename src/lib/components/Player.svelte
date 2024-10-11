@@ -1,11 +1,11 @@
 <script>
 	import { onMount } from 'svelte';
-
-	let isDummy = $state(true);
+	import { currentVideo, isShowDummyVideo } from '$lib/state/Playlist.svelte';
 
 	const sampleVideoId = 'M7lc1UVf-VE';
 
-	function initializePlayer(videoId) {
+	function initializePlayer() {
+		const videoId = currentVideo.id;
 		const iframe = document.createElement('iframe');
 		iframe.id = 'iframe-player';
 		iframe.src = `https://www.youtube.com/embed/${videoId}?enablejsapi=1`;
@@ -39,10 +39,19 @@
 	}
 
 	onMount(() => {
-		// isDummy = false;
+		// currentVideo.id = sampleVideoId;
 		// requestAnimationFrame(() => {
 		// 	initializePlayer(sampleVideoId);
 		// });
+	});
+
+	$effect(() => {
+		if (currentVideo.id) {
+			requestAnimationFrame(() => {
+				// TODO check if player is already initialized, use some state for it
+				// initializePlayer(sampleVideoId);
+			});
+		}
 	});
 </script>
 
@@ -68,7 +77,7 @@
 	</div>
 {/snippet}
 
-{#if isDummy}
+{#if isShowDummyVideo()}
 	<div class="relative h-[0] w-full pb-[56.25%]">
 		<div class="t-[0] l-[0] absolute h-full w-full">{@render dummy()}</div>
 	</div>

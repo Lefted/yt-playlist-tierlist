@@ -28,7 +28,7 @@
 					</Card.Description>
 				</Card.Header>
 				<Card.Footer>
-					<Button>Import New Playlist</Button>
+					<Button on:click={() => {}}>Import New Playlist</Button>
 				</Card.Footer>
 			</Card.Root>
 			<Card.Root
