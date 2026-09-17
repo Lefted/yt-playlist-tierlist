@@ -1,31 +1,29 @@
 <script>
-	import { DropdownMenu as DropdownMenuPrimitive } from "bits-ui";
-	import DotFilled from "svelte-radix/DotFilled.svelte";
-	import { cn } from "$lib/utils.js";
-	let className = undefined;
-	export let value;
-	export { className as class };
+	import { DropdownMenu as DropdownMenuPrimitive } from 'bits-ui';
+	import CheckIcon from '@lucide/svelte/icons/check';
+	import { cn } from '$lib/utils.js';
+
+	let { ref = $bindable(null), class: className, children: childrenProp, ...restProps } = $props();
 </script>
 
 <DropdownMenuPrimitive.RadioItem
+	bind:ref
+	data-slot="dropdown-menu-radio-item"
 	class={cn(
-		"data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+		"focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground relative flex cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 data-inset:pl-7 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 		className
 	)}
-	{value}
-	{...$$restProps}
-	on:click
-	on:keydown
-	on:focusin
-	on:focusout
-	on:pointerdown
-	on:pointerleave
-	on:pointermove
+	{...restProps}
 >
-	<span class="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-		<DropdownMenuPrimitive.RadioIndicator>
-			<DotFilled class="h-4 w-4 fill-current" />
-		</DropdownMenuPrimitive.RadioIndicator>
-	</span>
-	<slot />
+	{#snippet children({ checked })}
+		<span
+			class="pointer-events-none absolute right-2 flex items-center justify-center"
+			data-slot="dropdown-menu-radio-item-indicator"
+		>
+			{#if checked}
+				<CheckIcon />
+			{/if}
+		</span>
+		{@render childrenProp?.({ checked })}
+	{/snippet}
 </DropdownMenuPrimitive.RadioItem>

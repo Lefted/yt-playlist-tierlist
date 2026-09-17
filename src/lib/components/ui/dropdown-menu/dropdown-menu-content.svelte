@@ -1,23 +1,27 @@
 <script>
-	import { DropdownMenu as DropdownMenuPrimitive } from "bits-ui";
-	import { cn, flyAndScale } from "$lib/utils.js";
-	let className = undefined;
-	export let sideOffset = 4;
-	export let transition = flyAndScale;
-	export let transitionConfig = undefined;
-	export { className as class };
+	import { DropdownMenu as DropdownMenuPrimitive } from 'bits-ui';
+	import { cn } from '$lib/utils.js';
+	import DropdownMenuPortal from './dropdown-menu-portal.svelte';
+	let {
+		ref = $bindable(null),
+		sideOffset = 4,
+		align = 'start',
+		portalProps,
+		class: className,
+		...restProps
+	} = $props();
 </script>
 
-<DropdownMenuPrimitive.Content
-	{transition}
-	{transitionConfig}
-	{sideOffset}
-	class={cn(
-		"bg-popover text-popover-foreground z-50 min-w-[8rem] rounded-md border p-1 shadow-md focus:outline-none",
-		className
-	)}
-	{...$$restProps}
-	on:keydown
->
-	<slot />
-</DropdownMenuPrimitive.Content>
+<DropdownMenuPortal {...portalProps}>
+	<DropdownMenuPrimitive.Content
+		bind:ref
+		data-slot="dropdown-menu-content"
+		{sideOffset}
+		{align}
+		class={cn(
+			'data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 bg-popover text-popover-foreground z-50 max-h-(--bits-dropdown-menu-content-available-height) w-(--bits-dropdown-menu-anchor-width) min-w-32 origin-(--bits-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg p-1 shadow-md ring-1 duration-100 data-closed:overflow-hidden',
+			className
+		)}
+		{...restProps}
+	/>
+</DropdownMenuPortal>
