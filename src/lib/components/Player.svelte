@@ -1,57 +1,16 @@
 <script>
-	import { onMount } from 'svelte';
-	import { currentVideo, isShowDummyVideo } from '$lib/state/Playlist.svelte';
+	/* global YT */
+	import { currentVideo, isShowDummyVideo } from '$lib/state/Playlist.svelte.js';
 
-	const sampleVideoId = 'M7lc1UVf-VE';
-
-	function initializePlayer() {
-		const videoId = currentVideo.id;
-		const iframe = document.createElement('iframe');
-		iframe.id = 'iframe-player';
-		iframe.src = `https://www.youtube.com/embed/${videoId}?enablejsapi=1`;
-		iframe.frameBorder = '0';
-		iframe.allow =
-			'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
-		iframe.allowFullscreen = true;
-		iframe.style.position = 'absolute';
-		iframe.style.top = '0';
-		iframe.style.left = '0';
-		iframe.style.width = '100%';
-		iframe.style.height = '100%';
-
-		const playerContainer = document.getElementById('playerContainer');
-		if (!playerContainer) {
-			alert('Player container not found');
-			return;
-		}
-		playerContainer.innerHTML = ''; // Clear any existing content
-		playerContainer.appendChild(iframe);
-
-		const player = new YT.Player('iframe-player', {
-			events: {
-				// onReady: () => {
-				// 	debugger;
-				// },
-				// onStateChange: onPlayerStateChange,
-				// onError: onPlayerError
-			}
-		});
-	}
-
-	onMount(() => {
-		// currentVideo.id = sampleVideoId;
-		// requestAnimationFrame(() => {
-		// 	initializePlayer(sampleVideoId);
-		// });
-	});
+	const embedUrl = $derived(
+		currentVideo.id ? `https://www.youtube.com/embed/${currentVideo.id}?enablejsapi=1` : null
+	);
 
 	$effect(() => {
-		if (currentVideo.id) {
-			requestAnimationFrame(() => {
-				// TODO check if player is already initialized, use some state for it
-				// initializePlayer(sampleVideoId);
-			});
-		}
+		if (!embedUrl) return;
+		// The iframe API script loads asynchronously; only hook into it once it is there.
+		if (typeof YT === 'undefined' || !YT.Player) return;
+		new YT.Player('iframe-player', { events: {} });
 	});
 </script>
 
@@ -62,7 +21,7 @@
 {#snippet dummy()}
 	<div role="status" class="flex h-full w-full items-center justify-center rounded-xl border">
 		<svg
-			class="light:fg-current h-10 w-10 animate-pulse dark:text-secondary"
+			class="dark:text-secondary h-10 w-10 animate-pulse text-current"
 			aria-hidden="true"
 			xmlns="http://www.w3.org/2000/svg"
 			fill="currentColor"
@@ -77,10 +36,19 @@
 	</div>
 {/snippet}
 
-{#if isShowDummyVideo()}
-	<div class="relative h-[0] w-full pb-[56.25%]">
-		<div class="t-[0] l-[0] absolute h-full w-full">{@render dummy()}</div>
+<div class="relative h-0 w-full pb-[56.25%]">
+	<div class="absolute top-0 left-0 h-full w-full">
+		{#if isShowDummyVideo() || !embedUrl}
+			{@render dummy()}
+		{:else}
+			<iframe
+				id="iframe-player"
+				class="h-full w-full border-0"
+				src={embedUrl}
+				title={currentVideo.title ?? 'YouTube video player'}
+				allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+				allowfullscreen
+			></iframe>
+		{/if}
 	</div>
-{:else}
-	<div id="playerContainer" class="relative h-[0] w-full pb-[56.25%]"></div>
-{/if}
+</div>

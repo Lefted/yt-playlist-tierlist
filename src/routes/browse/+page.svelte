@@ -4,9 +4,9 @@
 	import { Progress } from '$lib/components/ui/progress/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
-	import ListFilter from 'lucide-svelte/icons/list-filter';
+	import ListFilter from '@lucide/svelte/icons/list-filter';
 
-	import EllipsisVertical from 'lucide-svelte/icons/ellipsis-vertical';
+	import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 
 	import Player from '$lib/components/Player.svelte';
@@ -22,13 +22,13 @@
 			>
 				<Card.Header class="pb-3">
 					<Card.Title>Your Playlist</Card.Title>
-					<Card.Description class="max-w-lg text-balance leading-relaxed">
+					<Card.Description class="max-w-lg leading-relaxed text-balance">
 						Use your own custom youtube API_KEY to import your playlist or load an existing
 						collection of videos.
 					</Card.Description>
 				</Card.Header>
 				<Card.Footer>
-					<Button on:click={() => {}}>Import New Playlist</Button>
+					<Button onclick={() => {}}>Import New Playlist</Button>
 				</Card.Footer>
 			</Card.Root>
 			<Card.Root
@@ -40,7 +40,7 @@
 					<Card.Title class="text-4xl">915</Card.Title>
 				</Card.Header>
 				<Card.Content>
-					<div class="text-xs text-muted-foreground">total videos</div>
+					<div class="text-muted-foreground text-xs">total videos</div>
 				</Card.Content>
 				<Card.Footer>
 					<Progress value={25} aria-label="25% ranked" />
@@ -55,7 +55,7 @@
 					<Card.Title class="text-4xl">405</Card.Title>
 				</Card.Header>
 				<Card.Content>
-					<div class="text-xs text-muted-foreground">S-tier videos</div>
+					<div class="text-muted-foreground text-xs">S-tier videos</div>
 				</Card.Content>
 				<Card.Footer>
 					<Progress value={13} aria-label="13% s-tier videos" />
@@ -89,11 +89,13 @@
 
 			<div class="ml-auto flex items-center gap-2">
 				<DropdownMenu.Root>
-					<DropdownMenu.Trigger asChild let:builder>
-						<Button variant="outline" size="sm" class="h-7 gap-1 text-sm" builders={[builder]}>
-							<ListFilter class="h-3.5 w-3.5" />
-							<span class="sr-only sm:not-sr-only">Filter</span>
-						</Button>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button {...props} variant="outline" size="sm" class="h-7 gap-1 text-sm">
+								<ListFilter class="h-3.5 w-3.5" />
+								<span class="sr-only sm:not-sr-only">Filter</span>
+							</Button>
+						{/snippet}
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="end">
 						<DropdownMenu.Label>Filter by</DropdownMenu.Label>
@@ -111,7 +113,7 @@
 			data-x-chunk-name="dashboard-05-chunk-4"
 			data-x-chunk-description="An order details card with order details, shipping information, customer information and payment information."
 		>
-			<Card.Header class="flex flex-row items-start bg-muted/50">
+			<Card.Header class="bg-muted/50 flex flex-row items-start">
 				<div class="grid gap-0.5">
 					<Card.Title class="group flex items-center gap-2 text-lg">Playlist Name</Card.Title>
 					<Card.Description>Created: November 23, 2023</Card.Description>
@@ -122,11 +124,13 @@
 						<span class="lg:sr-only xl:not-sr-only xl:whitespace-nowrap"> Open in YouTube </span>
 					</Button>
 					<DropdownMenu.Root>
-						<DropdownMenu.Trigger asChild let:builder>
-							<Button builders={[builder]} size="icon" variant="outline" class="h-8 w-8">
-								<EllipsisVertical class="h-3.5 w-3.5" />
-								<span class="sr-only">More</span>
-							</Button>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props })}
+								<Button {...props} size="icon" variant="outline" class="h-8 w-8">
+									<EllipsisVertical class="h-3.5 w-3.5" />
+									<span class="sr-only">More</span>
+								</Button>
+							{/snippet}
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content align="end">
 							<DropdownMenu.Item>Export</DropdownMenu.Item>
@@ -175,7 +179,7 @@
 				<div class="grid grid-cols-2 gap-4">
 					<div class="grid gap-3">
 						<div class="font-semibold">Shipping Information</div>
-						<address class="grid gap-0.5 not-italic text-muted-foreground">
+						<address class="text-muted-foreground grid gap-0.5 not-italic">
 							<span>Liam Johnson</span>
 							<span>1234 Main St.</span>
 							<span>Anytown, CA 12345</span>
@@ -213,7 +217,7 @@
 					<div class="font-semibold">Payment Information</div>
 					<dl class="grid gap-3">
 						<div class="flex items-center justify-between">
-							<dt class="flex items-center gap-1 text-muted-foreground">
+							<dt class="text-muted-foreground flex items-center gap-1">
 								<!-- <CreditCard class="h-4 w-4" /> -->
 								Visa
 							</dt>
@@ -223,8 +227,8 @@
 				</div>
 			</Card.Content>
 
-			<Card.Footer class="flex flex-row items-center border-t bg-muted/50 px-6 py-3">
-				<div class="text-xs text-muted-foreground">
+			<Card.Footer class="bg-muted/50 flex flex-row items-center border-t px-6 py-3">
+				<div class="text-muted-foreground text-xs">
 					Updated <time dateTime="2023-11-23">November 23, 2023</time>
 				</div>
 				<!-- <Pagination.Root count={10} class="ml-auto mr-0 w-auto">
