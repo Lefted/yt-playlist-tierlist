@@ -1,38 +1,46 @@
-# create-svelte
+# yt-playlist-tierlist
 
-Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/main/packages/create-svelte).
+Rank the videos of a YouTube playlist into tiers (S/A/B/C/D/F). The app is a pure
+client-side SPA — no server, no database, everything lives in the browser.
 
-## Creating a project
+## Stack
 
-If you're seeing this, you've probably already done this step. Congrats!
+- [SvelteKit 2](https://svelte.dev/docs/kit) + [Svelte 5](https://svelte.dev/docs/svelte) (runes, JavaScript + JSDoc)
+- [Tailwind CSS 4](https://tailwindcss.com) (CSS-first config in `src/app.css`)
+- [shadcn-svelte](https://shadcn-svelte.com) components (`src/lib/components/ui/`) on [bits-ui](https://bits-ui.com) 2
+- [`@sveltejs/adapter-static`](https://svelte.dev/docs/kit/adapter-static) with an `index.html` fallback
+- [Vitest](https://vitest.dev) for unit tests
 
-```bash
-# create a new project in the current directory
-npm create svelte@latest
-
-# create a new project in my-app
-npm create svelte@latest my-app
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Commands
 
 ```bash
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+npm install         # install dependencies
+npm run dev         # dev server on http://localhost:5173
+npm run build       # static build into build/ (index.html + _app/)
+npm run preview     # serve the production build locally
+npm run check       # svelte-check (JSDoc types)
+npm run lint        # prettier --check + eslint
+npm run format      # prettier --write
+npm test            # vitest run
+npm run test:watch  # vitest in watch mode
 ```
 
-## Building
+## Deployment
 
-To create a production version of your app:
+`npm run build` produces a fully static `build/` folder. Serve it from any static
+host, with a rewrite of unknown paths to `index.html` (SPA fallback).
+
+## Adding UI components
 
 ```bash
-npm run build
+npx shadcn-svelte@latest add <component>
 ```
 
-You can preview the production build with `npm run preview`.
+Components are written to `src/lib/components/ui/` and are meant to be edited in
+place; the configuration lives in `components.json`.
 
-> To deploy your app, you may need to install an [adapter](https://kit.svelte.dev/docs/adapters) for your target environment.
+## Legacy prototype
+
+`index.html`, `index.js` and `start-server.sh` in the repository root are the
+original vanilla-JS prototype. They are kept as a reference for porting the
+playlist import and rating logic and are excluded from lint/format.
