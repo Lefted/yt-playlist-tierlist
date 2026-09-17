@@ -1,14 +1,15 @@
 import js from '@eslint/js';
-import svelte from 'eslint-plugin-svelte';
 import prettier from 'eslint-config-prettier';
+import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
+import svelteConfig from './svelte.config.js';
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
 	js.configs.recommended,
-	...svelte.configs['flat/recommended'],
+	...svelte.configs.recommended,
 	prettier,
-	...svelte.configs['flat/prettier'],
+	...svelte.configs.prettier,
 	{
 		languageOptions: {
 			globals: {
@@ -18,6 +19,28 @@ export default [
 		}
 	},
 	{
-		ignores: ['build/', '.svelte-kit/', 'dist/']
+		files: ['**/*.svelte', '**/*.svelte.js'],
+		languageOptions: {
+			parserOptions: {
+				svelteConfig
+			}
+		}
+	},
+	{
+		// Vendored shadcn-svelte components: generic `href` props cannot be resolved here.
+		files: ['src/lib/components/ui/**/*.svelte'],
+		rules: {
+			'svelte/no-navigation-without-resolve': 'off'
+		}
+	},
+	{
+		ignores: [
+			'build/',
+			'.svelte-kit/',
+			'dist/',
+			'node_modules/',
+			// Legacy vanilla-JS prototype kept as the reference for the import/rating rewrite.
+			'index.js'
+		]
 	}
 ];
