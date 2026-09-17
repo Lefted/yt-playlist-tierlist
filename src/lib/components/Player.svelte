@@ -1,22 +1,10 @@
 <script>
-	/* global YT */
 	import { currentVideo, isShowDummyVideo } from '$lib/state/Playlist.svelte.js';
 
-	const embedUrl = $derived(
-		currentVideo.id ? `https://www.youtube.com/embed/${currentVideo.id}?enablejsapi=1` : null
-	);
-
-	$effect(() => {
-		if (!embedUrl) return;
-		// The iframe API script loads asynchronously; only hook into it once it is there.
-		if (typeof YT === 'undefined' || !YT.Player) return;
-		new YT.Player('iframe-player', { events: {} });
-	});
+	// Plain embed for now. The rating ticket replaces this with the YouTube iframe API
+	// (player events, autoplay, fullscreen), which needs its script loaded explicitly.
+	const embedUrl = $derived(`https://www.youtube.com/embed/${currentVideo.id}?enablejsapi=1`);
 </script>
-
-<svelte:head>
-	<script src="https://www.youtube.com/iframe_api"></script>
-</svelte:head>
 
 {#snippet dummy()}
 	<div role="status" class="flex h-full w-full items-center justify-center rounded-xl border">
@@ -38,7 +26,7 @@
 
 <div class="relative h-0 w-full pb-[56.25%]">
 	<div class="absolute top-0 left-0 h-full w-full">
-		{#if isShowDummyVideo() || !embedUrl}
+		{#if isShowDummyVideo()}
 			{@render dummy()}
 		{:else}
 			<iframe

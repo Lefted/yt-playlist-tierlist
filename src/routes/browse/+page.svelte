@@ -10,6 +10,9 @@
 	import { Separator } from '$lib/components/ui/separator/index.js';
 
 	import Player from '$lib/components/Player.svelte';
+
+	// Placeholder tier labels; the rating ticket replaces them with RATING_ORDER.
+	const tiers = ['S', 'A', 'B', 'C', 'D', 'F'];
 </script>
 
 <main class="grid flex-1 items-start gap-4 p-4 sm:px-6 md:gap-8 lg:grid-cols-3 xl:grid-cols-3">
@@ -67,24 +70,11 @@
 
 		<div class="flex items-center">
 			<ToggleGroup.Root variant="outline" type="multiple">
-				<ToggleGroup.Item value="S" aria-label="Toggle S tier">
-					<h2>S</h2>
-				</ToggleGroup.Item>
-				<ToggleGroup.Item value="A" aria-label="Toggle A tier">
-					<h2>A</h2>
-				</ToggleGroup.Item>
-				<ToggleGroup.Item value="B" aria-label="Toggle B tier">
-					<h2>B</h2>
-				</ToggleGroup.Item>
-				<ToggleGroup.Item value="C" aria-label="Toggle C tier">
-					<h2>C</h2>
-				</ToggleGroup.Item>
-				<ToggleGroup.Item value="D" aria-label="Toggle D tier">
-					<h2>D</h2>
-				</ToggleGroup.Item>
-				<ToggleGroup.Item value="F" aria-label="Toggle F tier">
-					<h2>F</h2>
-				</ToggleGroup.Item>
+				{#each tiers as tier (tier)}
+					<ToggleGroup.Item value={tier} aria-label={`Toggle ${tier} tier`}>
+						<h2>{tier}</h2>
+					</ToggleGroup.Item>
+				{/each}
 			</ToggleGroup.Root>
 
 			<div class="ml-auto flex items-center gap-2">
