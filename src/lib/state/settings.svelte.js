@@ -7,8 +7,10 @@
  */
 
 import { load, save } from '../storage.js';
+import { DEFAULT_SHORTCUT_MODE, isShortcutMode } from '../types.js';
 
 /** @typedef {import('../types.js').Settings} Settings */
+/** @typedef {import('../types.js').ShortcutMode} ShortcutMode */
 
 const STORAGE_KEY = 'settings';
 /**
@@ -23,7 +25,8 @@ const DEFAULTS = {
 	apiKey: '',
 	skipRated: true,
 	autoAdvance: true,
-	fullscreenOnPlay: false
+	fullscreenOnPlay: false,
+	shortcuts: DEFAULT_SHORTCUT_MODE
 };
 
 class SettingsStore {
@@ -31,6 +34,8 @@ class SettingsStore {
 	#skipRated = $state(DEFAULTS.skipRated);
 	#autoAdvance = $state(DEFAULTS.autoAdvance);
 	#fullscreenOnPlay = $state(DEFAULTS.fullscreenOnPlay);
+	/** @type {ShortcutMode} */
+	#shortcuts = $state(DEFAULTS.shortcuts);
 
 	constructor() {
 		this.#apply(load(STORAGE_KEY, DEFAULTS));
@@ -77,6 +82,19 @@ class SettingsStore {
 	}
 
 	/**
+	 * @returns {ShortcutMode} Which keys the Rate page answers to — `'off'` means
+	 * none at all, buttons only.
+	 */
+	get shortcuts() {
+		return this.#shortcuts;
+	}
+
+	set shortcuts(value) {
+		this.#shortcuts = isShortcutMode(value) ? value : DEFAULT_SHORTCUT_MODE;
+		this.#persist();
+	}
+
+	/**
 	 * Plain snapshot, e.g. for tests or exports.
 	 * @returns {Settings}
 	 */
@@ -85,7 +103,8 @@ class SettingsStore {
 			apiKey: this.#apiKey,
 			skipRated: this.#skipRated,
 			autoAdvance: this.#autoAdvance,
-			fullscreenOnPlay: this.#fullscreenOnPlay
+			fullscreenOnPlay: this.#fullscreenOnPlay,
+			shortcuts: this.#shortcuts
 		};
 	}
 
@@ -104,6 +123,7 @@ class SettingsStore {
 			typeof stored.fullscreenOnPlay === 'boolean'
 				? stored.fullscreenOnPlay
 				: DEFAULTS.fullscreenOnPlay;
+		this.#shortcuts = isShortcutMode(stored.shortcuts) ? stored.shortcuts : DEFAULTS.shortcuts;
 	}
 
 	/** @returns {void} */

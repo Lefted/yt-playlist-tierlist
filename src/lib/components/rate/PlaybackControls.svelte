@@ -16,8 +16,9 @@
 
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
+	import { DEFAULT_SHORTCUT_MODE } from '$lib/types.js';
 	import { cn } from '$lib/utils.js';
-	import { SHORTCUT_KEYS } from './shortcuts.js';
+	import { shortcutKeys } from './shortcuts.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -32,12 +33,15 @@
 	 * @property {boolean} [canUndo]
 	 * @property {string} [undoLabel] - What undoing would take back, for the tooltip.
 	 * @property {() => void} onundo
+	 * @property {import('$lib/types.js').ShortcutMode} [mode] - Which keys the tooltips
+	 *   promise; `'off'` promises none.
 	 * @property {string} [class]
 	 */
 
 	/** @type {Props} */
 	let {
 		playing = false,
+		mode = DEFAULT_SHORTCUT_MODE,
 		canPrevious = true,
 		canNext = true,
 		canUndo = false,
@@ -56,18 +60,20 @@
 	 * @property {string} id - Stable across a label change (Play ↔ Pause).
 	 * @property {string} label
 	 * @property {string} [tooltip] - Defaults to the label; the undo button says what it would undo.
-	 * @property {string[]} keys - Display labels, see `SHORTCUT_KEYS`.
+	 * @property {string[]} keys - Display labels, see `shortcutKeys`; empty while off.
 	 * @property {any} icon - A `@lucide/svelte` icon component.
 	 * @property {() => void} onclick
 	 * @property {boolean} [disabled]
 	 */
+
+	const keys = $derived(shortcutKeys(mode));
 
 	/** @type {Control[]} */
 	const controls = $derived([
 		{
 			id: 'previous',
 			label: 'Previous',
-			keys: SHORTCUT_KEYS.previous,
+			keys: keys.previous,
 			icon: SkipBack,
 			onclick: onprevious,
 			disabled: !canPrevious
@@ -75,28 +81,28 @@
 		{
 			id: 'replay',
 			label: 'Replay',
-			keys: SHORTCUT_KEYS.replay,
+			keys: keys.replay,
 			icon: RotateCcw,
 			onclick: onreplay
 		},
 		{
 			id: 'play-pause',
 			label: playing ? 'Pause' : 'Play',
-			keys: SHORTCUT_KEYS.playPause,
+			keys: keys.playPause,
 			icon: playing ? Pause : Play,
 			onclick: onplaypause
 		},
 		{
 			id: 'fullscreen',
 			label: 'Fullscreen',
-			keys: SHORTCUT_KEYS.fullscreen,
+			keys: keys.fullscreen,
 			icon: Maximize,
 			onclick: onfullscreen
 		},
 		{
 			id: 'skip',
 			label: 'Skip',
-			keys: SHORTCUT_KEYS.next,
+			keys: keys.next,
 			icon: SkipForward,
 			onclick: onnext,
 			disabled: !canNext
@@ -105,7 +111,7 @@
 			id: 'undo',
 			label: 'Undo',
 			tooltip: undoLabel,
-			keys: SHORTCUT_KEYS.undo,
+			keys: keys.undo,
 			icon: Undo2,
 			onclick: onundo,
 			disabled: !canUndo

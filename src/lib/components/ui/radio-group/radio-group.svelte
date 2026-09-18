@@ -1,0 +1,14 @@
+<script>
+	import { RadioGroup as RadioGroupPrimitive } from 'bits-ui';
+	import { cn } from '$lib/utils.js';
+
+	let { ref = $bindable(null), class: className, value = $bindable(''), ...restProps } = $props();
+</script>
+
+<RadioGroupPrimitive.Root
+	bind:ref
+	bind:value
+	data-slot="radio-group"
+	class={cn('grid w-full gap-2', className)}
+	{...restProps}
+/>

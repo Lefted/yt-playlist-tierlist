@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { isTypingTarget, SHORTCUT_HELP, shortcutFor, shortcutsEnabled } from './shortcuts.js';
+import {
+	isTypingTarget,
+	ratingForKey,
+	shortcutFor,
+	shortcutKeys,
+	shortcutTable,
+	shortcutsEnabled,
+	tierKeysFor
+} from './shortcuts.js';
 import { RATING_ORDER } from '$lib/types.js';
 
 /**
@@ -8,7 +16,15 @@ import { RATING_ORDER } from '$lib/types.js';
  * @returns {any}
  */
 function keydown(key, modifiers = {}) {
-	return { key, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, ...modifiers };
+	return {
+		key,
+		shiftKey: false,
+		ctrlKey: false,
+		metaKey: false,
+		altKey: false,
+		repeat: false,
+		...modifiers
+	};
 }
 
 /**
@@ -19,10 +35,36 @@ function documentStub(match = null) {
 	return { querySelector: () => match };
 }
 
-describe('shortcutFor', () => {
+describe('tier keys per mode', () => {
+	it('maps the tiers to their letters by default', () => {
+		expect(tierKeysFor('letters')).toEqual({ S: 's', A: 'a', B: 'b', C: 'c', D: 'd', F: 'f' });
+	});
+
+	it('maps the tiers to 1-6 in digits mode', () => {
+		expect(tierKeysFor('digits')).toEqual({ S: '1', A: '2', B: '3', C: '4', D: '5', F: '6' });
+	});
+
+	it('has no keys at all while off', () => {
+		expect(tierKeysFor('off')).toBeNull();
+	});
+
+	it('looks a key back up per mode', () => {
+		expect(ratingForKey('letters', 'c')).toBe('C');
+		expect(ratingForKey('letters', '4')).toBeNull();
+		expect(ratingForKey('digits', '4')).toBe('C');
+		expect(ratingForKey('digits', 'c')).toBeNull();
+		expect(ratingForKey('off', 'c')).toBeNull();
+	});
+});
+
+describe('shortcutFor in letters mode', () => {
 	it.each(RATING_ORDER)('maps %s to rating that tier', (rating) => {
-		expect(shortcutFor(keydown(rating.toLowerCase()))).toEqual({ type: 'rate', rating });
-		expect(shortcutFor(keydown(rating))).toEqual({ type: 'rate', rating });
+		expect(shortcutFor(keydown(rating.toLowerCase()), 'letters')).toEqual({ type: 'rate', rating });
+		expect(shortcutFor(keydown(rating), 'letters')).toEqual({ type: 'rate', rating });
+	});
+
+	it('defaults to letters when no mode is given', () => {
+		expect(shortcutFor(keydown('s'))).toEqual({ type: 'rate', rating: 'S' });
 	});
 
 	it('maps n and ArrowRight to next', () => {
@@ -74,6 +116,11 @@ describe('shortcutFor', () => {
 		expect(shortcutFor(keydown('z', { ctrlKey: true, altKey: true }))).toBeNull();
 	});
 
+	it('ignores a held key, so one f too long rates one video', () => {
+		expect(shortcutFor(keydown('f', { repeat: true }))).toBeNull();
+		expect(shortcutFor(keydown('n', { repeat: true }))).toBeNull();
+	});
+
 	it('ignores shift plus an unrelated key', () => {
 		expect(shortcutFor(keydown('S', { shiftKey: true }))).toBeNull();
 		expect(shortcutFor(keydown('N', { shiftKey: true }))).toBeNull();
@@ -84,6 +131,45 @@ describe('shortcutFor', () => {
 		expect(shortcutFor(keydown('Enter'))).toBeNull();
 		expect(shortcutFor(/** @type {any} */ ({}))).toBeNull();
 		expect(shortcutFor(/** @type {any} */ (null))).toBeNull();
+	});
+});
+
+describe('shortcutFor in digits mode', () => {
+	it.each(RATING_ORDER.map((rating, index) => [String(index + 1), rating]))(
+		'rates with %s',
+		(key, rating) => {
+			expect(shortcutFor(keydown(key), 'digits')).toEqual({ type: 'rate', rating });
+		}
+	);
+
+	it('leaves the tier letters alone — f is the YouTube habit, not an F rating', () => {
+		for (const rating of RATING_ORDER) {
+			expect(shortcutFor(keydown(rating.toLowerCase()), 'digits')).toBeNull();
+		}
+	});
+
+	it('keeps every non-tier key', () => {
+		expect(shortcutFor(keydown('n'), 'digits')).toEqual({ type: 'next' });
+		expect(shortcutFor(keydown('p'), 'digits')).toEqual({ type: 'previous' });
+		expect(shortcutFor(keydown('r'), 'digits')).toEqual({ type: 'replay' });
+		expect(shortcutFor(keydown(' '), 'digits')).toEqual({ type: 'playPause' });
+		expect(shortcutFor(keydown('u'), 'digits')).toEqual({ type: 'undo' });
+		expect(shortcutFor(keydown('?'), 'digits')).toEqual({ type: 'help' });
+		expect(shortcutFor(keydown('F', { shiftKey: true }), 'digits')).toEqual({ type: 'fullscreen' });
+	});
+
+	it('drops 0 for replay, which would read like a seventh tier', () => {
+		expect(shortcutFor(keydown('0'), 'digits')).toBeNull();
+	});
+});
+
+describe('shortcutFor while off', () => {
+	it('answers nothing at all', () => {
+		for (const key of ['s', '1', 'n', 'p', 'r', ' ', 'u', 'Backspace', '?', '0']) {
+			expect(shortcutFor(keydown(key), 'off')).toBeNull();
+		}
+		expect(shortcutFor(keydown('z', { ctrlKey: true }), 'off')).toBeNull();
+		expect(shortcutFor(keydown('F', { shiftKey: true }), 'off')).toBeNull();
 	});
 });
 
@@ -117,6 +203,15 @@ describe('shortcutsEnabled', () => {
 		expect(shortcutsEnabled({ target: { tagName: 'BODY' } }, documentStub('dialog'))).toBe(false);
 	});
 
+	it('is false in every case while the mode is off', () => {
+		expect(shortcutsEnabled({ target: { tagName: 'BODY' } }, documentStub(), 'off')).toBe(false);
+		expect(shortcutsEnabled({ target: null }, null, 'off')).toBe(false);
+	});
+
+	it('is true in digits mode under the same conditions as in letters mode', () => {
+		expect(shortcutsEnabled({ target: { tagName: 'BODY' } }, documentStub(), 'digits')).toBe(true);
+	});
+
 	it('asks for open popover content, which carries no ARIA role', () => {
 		/** @type {string[]} */
 		const asked = [];
@@ -135,15 +230,44 @@ describe('shortcutsEnabled', () => {
 	});
 });
 
-describe('SHORTCUT_HELP', () => {
-	it('documents every tier key', () => {
-		expect(SHORTCUT_HELP[0].keys).toEqual(RATING_ORDER);
+describe('shortcutKeys', () => {
+	it('shows the tier letters in letters mode and the digits in digits mode', () => {
+		expect(shortcutKeys('letters').rate).toEqual(RATING_ORDER);
+		expect(shortcutKeys('digits').rate).toEqual(['1', '2', '3', '4', '5', '6']);
 	});
 
-	it('has a description for every entry', () => {
-		for (const entry of SHORTCUT_HELP) {
-			expect(entry.keys.length).toBeGreaterThan(0);
-			expect(entry.description).not.toBe('');
+	it('drops 0 from the replay hint in digits mode', () => {
+		expect(shortcutKeys('letters').replay).toEqual(['R', '0']);
+		expect(shortcutKeys('digits').replay).toEqual(['R']);
+	});
+
+	it('promises no key at all while off', () => {
+		for (const keys of Object.values(shortcutKeys('off'))) expect(keys).toEqual([]);
+	});
+});
+
+describe('shortcutTable', () => {
+	it('documents every tier key of the active mode', () => {
+		expect(shortcutTable('letters')[0].keys).toEqual(RATING_ORDER);
+		expect(shortcutTable('digits')[0].keys).toEqual(['1', '2', '3', '4', '5', '6']);
+	});
+
+	it('has a description and at least one key for every entry', () => {
+		for (const mode of /** @type {const} */ (['letters', 'digits'])) {
+			for (const entry of shortcutTable(mode)) {
+				expect(entry.keys.length).toBeGreaterThan(0);
+				expect(entry.description).not.toBe('');
+			}
 		}
+	});
+
+	it('lists undo', () => {
+		expect(shortcutTable('letters').map((entry) => entry.description)).toContain(
+			'Undo the last rating'
+		);
+	});
+
+	it('is empty while off, so the popover can say so instead', () => {
+		expect(shortcutTable('off')).toEqual([]);
 	});
 });

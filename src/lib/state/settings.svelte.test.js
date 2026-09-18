@@ -31,7 +31,8 @@ describe('defaults', () => {
 			apiKey: '',
 			skipRated: true,
 			autoAdvance: true,
-			fullscreenOnPlay: false
+			fullscreenOnPlay: false,
+			shortcuts: 'letters'
 		});
 	});
 });
@@ -47,7 +48,8 @@ describe('persistence', () => {
 			apiKey: 'AIza-test',
 			skipRated: false,
 			autoAdvance: true,
-			fullscreenOnPlay: false
+			fullscreenOnPlay: false,
+			shortcuts: 'letters'
 		});
 	});
 
@@ -58,7 +60,8 @@ describe('persistence', () => {
 				apiKey: 'stored',
 				skipRated: false,
 				autoAdvance: false,
-				fullscreenOnPlay: true
+				fullscreenOnPlay: true,
+				shortcuts: 'digits'
 			})
 		});
 
@@ -66,7 +69,8 @@ describe('persistence', () => {
 			apiKey: 'stored',
 			skipRated: false,
 			autoAdvance: false,
-			fullscreenOnPlay: true
+			fullscreenOnPlay: true,
+			shortcuts: 'digits'
 		});
 	});
 
@@ -95,5 +99,29 @@ describe('coercion', () => {
 		const { settings } = await boot();
 		settings.autoAdvance = /** @type {any} */ (0);
 		expect(settings.autoAdvance).toBe(false);
+	});
+});
+
+describe('shortcut mode', () => {
+	it('starts on the letter keys', async () => {
+		const { settings } = await boot();
+		expect(settings.shortcuts).toBe('letters');
+	});
+
+	it('takes the three modes and persists them', async () => {
+		const { settings } = await boot();
+		for (const mode of ['digits', 'off', 'letters']) {
+			settings.shortcuts = /** @type {any} */ (mode);
+			expect(settings.shortcuts).toBe(mode);
+			expect(JSON.parse(/** @type {string} */ (store.entries.get(KEY))).shortcuts).toBe(mode);
+		}
+	});
+
+	it('falls back to letters for anything else, stored or assigned', async () => {
+		const { settings } = await boot({ [KEY]: JSON.stringify({ shortcuts: 'emoji' }) });
+		expect(settings.shortcuts).toBe('letters');
+
+		settings.shortcuts = /** @type {any} */ (null);
+		expect(settings.shortcuts).toBe('letters');
 	});
 });

@@ -278,15 +278,16 @@
 	 * @returns {void}
 	 */
 	function handleKeydown(event) {
-		if (!current || event.repeat) return;
+		if (!current) return;
 
-		const action = shortcutFor(event);
+		const mode = settings.shortcuts;
+		const action = shortcutFor(event, mode);
 		if (!action) return;
 
-		// `shortcutsEnabled` is the single gate: it covers both a text field having the
-		// focus and an overlay being up. The exception is `?`, which has to be able to
-		// close the very list it opened.
-		if (!shortcutsEnabled(event, document) && !(action.type === 'help' && helpOpen)) return;
+		// `shortcutsEnabled` is the single gate: it covers the chosen mode, a text field
+		// having the focus and an overlay being up. The exception is `?`, which has to
+		// be able to close the very list it opened.
+		if (!shortcutsEnabled(event, document, mode) && !(action.type === 'help' && helpOpen)) return;
 		event.preventDefault();
 		if (fullscreen) keepOverlayUp();
 
@@ -395,6 +396,7 @@
 			<div class="mx-auto flex w-full max-w-4xl flex-col gap-1.5">
 				<PlaybackControls
 					{playing}
+					mode={settings.shortcuts}
 					canPrevious={session.hasPrevious}
 					canNext={session.hasNext}
 					onprevious={() => session.previous()}
@@ -415,6 +417,7 @@
 
 				<TierBar
 					bind:this={tierBar}
+					mode={settings.shortcuts}
 					rating={current.rating}
 					onrate={rate}
 					highlight={awaitingRating}

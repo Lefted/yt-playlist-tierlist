@@ -12,13 +12,21 @@
 
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Popover from '$lib/components/ui/popover/index.js';
+	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import { TIERS } from '$lib/tiers.js';
 	import { session } from '$lib/state/session.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
 	import { cn } from '$lib/utils.js';
-	import { SHORTCUT_HELP } from './shortcuts.js';
+	import { shortcutTable } from './shortcuts.js';
+
+	/** The three shortcut modes, as the settings popover words them. */
+	const SHORTCUT_CHOICES = [
+		{ value: 'letters', label: 'Letters', hint: 'S A B C D F' },
+		{ value: 'digits', label: 'Digits', hint: '1 – 6' },
+		{ value: 'off', label: 'Off', hint: 'Buttons only' }
+	];
 
 	/**
 	 * @typedef {Object} Props
@@ -33,6 +41,7 @@
 
 	const selectedTiers = $derived([...session.filter.tiers]);
 	const filtered = $derived(selectedTiers.length > 0 || !session.includeUnrated);
+	const shortcuts = $derived(shortcutTable(settings.shortcuts));
 </script>
 
 <div class={cn('flex flex-wrap items-center gap-1.5', className)}>
@@ -132,6 +141,32 @@
 				</span>
 				<Switch bind:checked={settings.fullscreenOnPlay} />
 			</label>
+
+			<fieldset class="grid gap-2 text-sm">
+				<legend class="mb-1">
+					Keyboard shortcuts
+					<span class="text-muted-foreground block text-xs">
+						On YouTube <kbd class="font-mono">F</kbd> means fullscreen — in letters mode it rates the
+						video F instead. Digits keep the two apart.
+					</span>
+				</legend>
+
+				<RadioGroup.Root
+					value={settings.shortcuts}
+					onValueChange={(/** @type {string} */ value) =>
+						(settings.shortcuts = /** @type {any} */ (value))}
+				>
+					{#each SHORTCUT_CHOICES as choice (choice.value)}
+						<label class="flex items-center gap-2">
+							<RadioGroup.Item value={choice.value} id="shortcuts-{choice.value}" />
+							<span>
+								{choice.label}
+								<span class="text-muted-foreground text-xs">({choice.hint})</span>
+							</span>
+						</label>
+					{/each}
+				</RadioGroup.Root>
+			</fieldset>
 		</Popover.Content>
 	</Popover.Root>
 
@@ -157,8 +192,15 @@
 			<Popover.Header>
 				<Popover.Title>Keyboard shortcuts</Popover.Title>
 			</Popover.Header>
+			{#if shortcuts.length === 0}
+				<p class="text-muted-foreground text-sm">
+					Keyboard shortcuts are off. Rate with the buttons, or switch them back on under
+					<span class="text-foreground">Settings</span>.
+				</p>
+			{/if}
+
 			<dl class="grid gap-1.5 text-sm">
-				{#each SHORTCUT_HELP as shortcut (shortcut.description)}
+				{#each shortcuts as shortcut (shortcut.description)}
 					<div class="flex items-center justify-between gap-3">
 						<dt class="text-muted-foreground">{shortcut.description}</dt>
 						<dd class="flex shrink-0 gap-1">
