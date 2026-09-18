@@ -5,8 +5,8 @@
 	 */
 	import TierBadge from '$lib/components/TierBadge.svelte';
 	import { Progress } from '$lib/components/ui/progress/index.js';
-	import { formatDuration } from './format.js';
-	import { cn } from '$lib/utils.js';
+	import { formatDuration } from '$lib/format.js';
+	import { cn, percentOf } from '$lib/utils.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -21,7 +21,7 @@
 	let { video, position, total, progress, class: className } = $props();
 
 	const duration = $derived(formatDuration(video.durationSeconds));
-	const percent = $derived(progress.total === 0 ? 0 : (progress.done / progress.total) * 100);
+	const percent = $derived(percentOf(progress.done, progress.total));
 </script>
 
 <div class={cn('flex flex-col gap-2', className)}>
