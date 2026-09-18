@@ -59,10 +59,12 @@ describe('network.watch', () => {
 
 	it('stops following once unsubscribed', () => {
 		const target = fakeWindow();
+		target.navigator.onLine = false;
 		network.watch(target)();
+		expect(network.online).toBe(false);
 
-		target.goto(false);
+		target.goto(true);
 
-		expect(network.online).toBe(true);
+		expect(network.online).toBe(false);
 	});
 });

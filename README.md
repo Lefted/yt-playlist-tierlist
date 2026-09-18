@@ -9,6 +9,7 @@ client-side SPA — no server, no database, everything lives in the browser.
 - [Tailwind CSS 4](https://tailwindcss.com) (CSS-first config in `src/app.css`)
 - [shadcn-svelte](https://shadcn-svelte.com) components (`src/lib/components/ui/`) on [bits-ui](https://bits-ui.com) 2
 - [`@sveltejs/adapter-static`](https://svelte.dev/docs/kit/adapter-static) with an `index.html` fallback
+- [`@vite-pwa/sveltekit`](https://vite-pwa-org.netlify.app/frameworks/sveltekit) for the web app manifest and service worker
 - [Vitest](https://vitest.dev) for unit tests
 
 ## Commands
@@ -23,7 +24,31 @@ npm run lint        # prettier --check + eslint
 npm run format      # prettier --write
 npm test            # vitest run
 npm run test:watch  # vitest in watch mode
+npm run icons       # re-rasterize the app icons into static/ (needs sharp)
 ```
+
+## PWA
+
+The manifest, the icons and the service worker are generated at build time by
+`SvelteKitPWA` in `vite.config.js`. The worker precaches the app shell and the
+`index.html` fallback, so the library renders offline; the YouTube player and
+playlist imports do not, and the header shows an offline badge instead.
+
+There is no service worker in `npm run dev` — use `npm run build && npm run preview`
+to exercise it.
+
+The icons in `static/` are committed, so the build never needs `sharp`. Re-run
+`npm run icons` only after editing the motif in `scripts/generate-icons.mjs`.
+
+## App shell
+
+`src/routes/+layout.svelte` owns the chrome: a sticky header (wordmark, desktop
+nav, offline badge, theme toggle) and, below `md`, a bottom tab bar. Both render
+from `src/lib/components/shell/nav.js`, so add a destination there once.
+
+The layout already reserves `--app-tab-bar-inset` below page content, so pages
+need no bottom padding of their own. Anything a page pins to the bottom of the
+viewport itself should offset by that variable.
 
 ## Deployment
 

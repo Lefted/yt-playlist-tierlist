@@ -65,26 +65,15 @@ export default defineConfig({
 							expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 },
 							cacheableResponse: { statuses: [0, 200] }
 						}
-					},
-					{
-						// The Data API answers and the IFrame player must never be served stale:
-						// quota errors, availability and playback all depend on a live response.
-						urlPattern: /^https:\/\/(www\.)?googleapis\.com\/.*/i,
-						handler: 'NetworkOnly'
-					},
-					{
-						urlPattern: /^https:\/\/(www\.)?youtube\.com\/.*/i,
-						handler: 'NetworkOnly'
 					}
+					// Deliberately no rule for googleapis.com or youtube.com/iframe_api: without
+					// a matching route the worker leaves them on the network, and quota errors,
+					// availability and playback all depend on a live response.
 				]
 			},
-			devOptions: {
-				// Keep the dev server free of a service worker; the PWA is verified against
-				// `npm run build && npm run preview`.
-				enabled: false,
-				type: 'module',
-				navigateFallback: '/'
-			}
+			// Keep the dev server free of a service worker; a stale precache is a poor
+			// trade for HMR. The PWA is verified against `npm run build && npm run preview`.
+			devOptions: { enabled: false }
 		})
 	],
 	test: {

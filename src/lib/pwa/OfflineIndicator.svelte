@@ -11,7 +11,6 @@
 		title="You are offline. Your library still works; playback and imports do not."
 	>
 		<WifiOff class="size-3.5" aria-hidden="true" />
-		<span class="hidden sm:inline">Offline</span>
-		<span class="sr-only sm:hidden">Offline</span>
+		Offline
 	</span>
 {/if}

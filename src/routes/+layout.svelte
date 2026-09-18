@@ -1,6 +1,5 @@
 <script>
 	import '../app.css';
-	import { base } from '$app/paths';
 	import { ModeWatcher } from 'mode-watcher';
 	import { pwaInfo } from 'virtual:pwa-info';
 
@@ -18,12 +17,11 @@
 	 *
 	 * The href it reports is page-relative (SvelteKit builds with relative asset
 	 * paths), which would resolve to the wrong place on a nested route served
-	 * through the SPA fallback — so pin it to the app root.
+	 * through the SPA fallback — so pin it to the site root, where the manifest's
+	 * own `scope` and `start_url` (see vite.config.js) already assume the app lives.
 	 */
 	const webManifest = pwaInfo?.webManifest;
-	const manifestHref = webManifest
-		? new URL(webManifest.href, `${location.origin}${base}/`).pathname
-		: '';
+	const manifestHref = webManifest ? new URL(webManifest.href, location.origin).pathname : '';
 
 	$effect(() => network.watch(window));
 </script>

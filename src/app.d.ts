@@ -1,4 +1,4 @@
-// See https://kit.svelte.dev/docs/types#types
+// See https://kit.svelte.dev/docs/types#app
 // for information about these interfaces
 
 /// <reference types="vite-plugin-pwa/info" />

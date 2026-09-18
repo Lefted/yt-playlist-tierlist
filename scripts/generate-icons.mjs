@@ -16,7 +16,11 @@ const staticDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'static');
 
 /** zinc-950 — the dark palette's background, also the manifest `background_color`. */
 const BACKGROUND = '#09090b';
-/** The orange accent of the S tier, matching `--primary` in `src/app.css`. */
+/**
+ * The orange accent of the S tier. `--primary` in `src/app.css` is orange in both
+ * palettes — oklch(0.705 0.213 47.604) light and oklch(0.646 0.222 41.116) dark —
+ * and these are the sRGB hex equivalents of that pair.
+ */
 const ACCENT_FROM = '#fb923c';
 const ACCENT_TO = '#ea580c';
 

@@ -83,10 +83,12 @@
  * of the viewport itself should offset by this variable.
  */
 :root {
-	--app-tab-bar-inset: calc(4rem + env(safe-area-inset-bottom));
+	--app-tab-bar-height: 4rem;
+	--app-tab-bar-inset: calc(var(--app-tab-bar-height) + env(safe-area-inset-bottom));
 }
 
-@media (width >= 48rem) {
+/* The `md` breakpoint, where BottomTabBar switches itself off via `md:hidden`. */
+@media (width >= theme(--breakpoint-md)) {
 	:root {
 		--app-tab-bar-inset: 0px;
 	}

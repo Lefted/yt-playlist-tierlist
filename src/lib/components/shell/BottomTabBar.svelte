@@ -2,9 +2,9 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 
-	import { NAV_ITEMS, isActiveRoute } from './nav.js';
+	import { navItemsFor } from './nav.js';
 
-	const pathname = $derived(page.url.pathname);
+	const navItems = $derived(navItemsFor(page.url.pathname));
 </script>
 
 <!--
@@ -15,13 +15,11 @@
 	aria-label="Main"
 	class="bg-background/95 supports-[backdrop-filter]:bg-background/80 fixed inset-x-0 bottom-0 z-40 border-t pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
 >
-	<ul class="flex h-16 items-stretch">
-		{#each NAV_ITEMS as { route, label, icon: Icon } (route)}
-			{@const href = resolve(route)}
-			{@const active = isActiveRoute(href, pathname)}
+	<ul class="flex h-(--app-tab-bar-height) items-stretch">
+		{#each navItems as { route, label, icon: Icon, active } (route)}
 			<li class="flex-1">
 				<a
-					{href}
+					href={resolve(route)}
 					aria-current={active ? 'page' : undefined}
 					class="hover:text-foreground flex h-full flex-col items-center justify-center gap-1 text-xs font-medium transition-colors {active
 						? 'text-primary'

@@ -7,9 +7,9 @@
 
 	import { Button } from '$lib/components/ui/button/index.js';
 	import OfflineIndicator from '$lib/pwa/OfflineIndicator.svelte';
-	import { NAV_ITEMS, isActiveRoute } from './nav.js';
+	import { navItemsFor } from './nav.js';
 
-	const pathname = $derived(page.url.pathname);
+	const navItems = $derived(navItemsFor(page.url.pathname));
 </script>
 
 <header
@@ -30,12 +30,11 @@
 
 		<!-- On mobile the same destinations live in the bottom tab bar. -->
 		<nav class="hidden items-center gap-5 text-sm font-medium md:flex lg:gap-6" aria-label="Main">
-			{#each NAV_ITEMS as { route, label } (route)}
-				{@const href = resolve(route)}
+			{#each navItems as { route, label, active } (route)}
 				<a
-					{href}
-					aria-current={isActiveRoute(href, pathname) ? 'page' : undefined}
-					class="hover:text-foreground transition-colors {isActiveRoute(href, pathname)
+					href={resolve(route)}
+					aria-current={active ? 'page' : undefined}
+					class="hover:text-foreground transition-colors {active
 						? 'text-foreground'
 						: 'text-muted-foreground'}"
 				>

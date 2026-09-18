@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_ITEMS, isActiveRoute } from './nav.js';
+import { NAV_ITEMS, isActiveRoute, navItemsFor } from './nav.js';
 
 describe('NAV_ITEMS', () => {
 	it('lists the two top-level destinations', () => {
@@ -23,9 +23,24 @@ describe('isActiveRoute', () => {
 	it('does not match an unrelated route', () => {
 		expect(isActiveRoute('/browse', '/rate')).toBe(false);
 	});
+});
 
-	it('treats a base-path root as active only for itself', () => {
-		expect(isActiveRoute('/app/', '/app/')).toBe(true);
-		expect(isActiveRoute('/app/', '/app/browse')).toBe(true);
+describe('navItemsFor', () => {
+	it('marks exactly the current destination active', () => {
+		const items = navItemsFor('/rate');
+		expect(items.map((item) => [item.route, item.active])).toEqual([
+			['/browse', false],
+			['/rate', true]
+		]);
+	});
+
+	it('marks nothing active outside the known destinations', () => {
+		expect(navItemsFor('/does-not-exist').some((item) => item.active)).toBe(false);
+	});
+
+	it('carries the label and icon of each destination', () => {
+		const items = navItemsFor('/browse');
+		expect(items.map((item) => item.label)).toEqual(['Browse', 'Rate']);
+		expect(items.every((item) => typeof item.icon === 'function')).toBe(true);
 	});
 });
