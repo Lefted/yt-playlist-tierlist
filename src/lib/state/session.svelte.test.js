@@ -146,11 +146,27 @@ describe('navigation', () => {
 	it('jumps to a video of the queue', () => {
 		expect(session.jumpTo('v4')).toBe(true);
 		expect(session.index).toBe(1);
-		expect(session.jumpTo('v2')).toBe(false);
-		expect(session.jumpTo('nope')).toBe(false);
 		expect(session.currentVideo?.id).toBe('v4');
 
-		session.restart();
+		expect(session.jumpTo('v1')).toBe(true);
+		expect(session.currentVideo?.id).toBe('v1');
+	});
+
+	it('pins a filtered-out video so a deep link still works', () => {
+		// v2 is rated and skipRated is on, so it is not in the queue.
+		expect(queueIds()).not.toContain('v2');
+		expect(session.jumpTo('v2')).toBe(true);
+		expect(session.currentVideo?.id).toBe('v2');
+		expect(queueIds()).toEqual(['v1', 'v2', 'v4']);
+
+		// Changing the filter drops the pin again.
+		session.clearFilter();
+		expect(queueIds()).toEqual(['v1', 'v4']);
+	});
+
+	it('refuses to jump to an unavailable or unknown video', () => {
+		expect(session.jumpTo('v3')).toBe(false);
+		expect(session.jumpTo('nope')).toBe(false);
 		expect(session.currentVideo?.id).toBe('v1');
 	});
 
@@ -209,5 +225,14 @@ describe('progress', () => {
 
 		session.rateCurrent('A');
 		expect(session.progress).toEqual({ done: 3, total: 4 });
+	});
+
+	it('counts only what the filter covers', () => {
+		// S-tier plus the unrated videos: v2, v1 and v4.
+		session.setFilter({ tiers: ['S'] });
+		expect(session.progress).toEqual({ done: 1, total: 3 });
+
+		session.setFilter({ tiers: ['S'], includeUnrated: false });
+		expect(session.progress).toEqual({ done: 1, total: 1 });
 	});
 });

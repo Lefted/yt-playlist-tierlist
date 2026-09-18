@@ -3,6 +3,7 @@
  * up in the bundle.
  */
 
+import { vi } from 'vitest';
 import { STORAGE_PREFIX } from '../storage.js';
 
 /** @typedef {import('../types.js').Playlist} Playlist */
@@ -37,6 +38,50 @@ export function createLocalStorageStub(initial = {}) {
 		clear() {
 			entries.clear();
 		}
+	};
+}
+
+/**
+ * Stub `globalThis.fetch` so it answers with the given bodies, in order.
+ *
+ * @param {Array<{ body: any, status?: number, ok?: boolean }>} responses
+ * @returns {import('vitest').Mock} The stub, for asserting on the requested URLs.
+ */
+export function stubFetch(responses) {
+	const queue = [...responses];
+	const fetch = vi.fn(async () => {
+		const next = queue.shift();
+		if (!next) throw new Error('fetch was called more often than the test set up');
+		const status = next.status ?? 200;
+		return {
+			ok: next.ok ?? status < 400,
+			status,
+			json: async () => next.body
+		};
+	});
+	vi.stubGlobal('fetch', fetch);
+	return fetch;
+}
+
+/**
+ * A `playlistItems` resource as the API would return it.
+ *
+ * @param {string} videoId
+ * @param {Partial<{ title: string, position: number, noResourceId: boolean }>} [options]
+ * @returns {any}
+ */
+export function playlistItemResource(videoId, options = {}) {
+	return {
+		id: `item-${videoId}`,
+		snippet: {
+			title: options.title ?? `Title ${videoId}`,
+			description: 'desc',
+			position: options.position ?? 0,
+			videoOwnerChannelTitle: 'Uploader',
+			thumbnails: { high: { url: `https://i.ytimg.com/vi/${videoId}/hq.jpg` } },
+			resourceId: options.noResourceId ? {} : { kind: 'youtube#video', videoId }
+		},
+		contentDetails: { videoPublishedAt: '2024-05-05T00:00:00Z' }
 	};
 }
 

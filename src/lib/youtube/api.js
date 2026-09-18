@@ -92,20 +92,27 @@ export function parsePlaylistInput(input) {
 
 	const fromUrl = /[?&#]list=([^&#\s]+)/.exec(trimmed);
 	if (fromUrl) {
+		// `list=` already states the intent, so the value only has to be id-shaped.
 		const id = safeDecode(fromUrl[1]);
-		return isPlaylistId(id) ? id : null;
+		return ID_CHARACTERS.test(id) ? id : null;
 	}
 
-	// A bare id never contains scheme, path or query characters.
-	return isPlaylistId(trimmed) ? trimmed : null;
+	return looksLikePlaylistId(trimmed) ? trimmed : null;
 }
 
+/** Characters a playlist id is made of. */
+const ID_CHARACTERS = /^[A-Za-z0-9_-]{2,}$/;
+
 /**
+ * A bare token only counts as a playlist id when it carries one of YouTube's
+ * playlist prefixes and has the length of a real id — otherwise every word a user
+ * types would parse as one.
+ *
  * @param {string} value
  * @returns {boolean}
  */
-function isPlaylistId(value) {
-	return /^[A-Za-z0-9_-]{2,}$/.test(value);
+function looksLikePlaylistId(value) {
+	return /^(?:PL|UU|FL|LL|RD|OL|TL|SP|PU)[A-Za-z0-9_-]{11,}$/.test(value);
 }
 
 /**

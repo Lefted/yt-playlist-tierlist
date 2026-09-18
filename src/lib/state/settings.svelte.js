@@ -11,6 +11,11 @@ import { load, save } from '../storage.js';
 /** @typedef {import('../types.js').Settings} Settings */
 
 const STORAGE_KEY = 'settings';
+/**
+ * Written into every persisted payload. Nothing reads it yet - it is what lets a
+ * future shape change migrate instead of discarding the user's ratings, and both
+ * loaders already tolerate unknown and missing fields.
+ */
 const STORAGE_VERSION = 1;
 
 /** @type {Settings} */

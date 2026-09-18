@@ -4,12 +4,17 @@ import {
 	createLocalStorageStub,
 	makePlaylist,
 	makeVideo,
-	storedLibrary
+	playlistItemResource,
+	storedLibrary,
+	stubFetch
 } from '../testing/fixtures.js';
 
 /** @typedef {import('./library.svelte.js')} LibraryModule */
 
 const KEY = `${STORAGE_PREFIX}library`;
+
+/** A realistic playlist id; the mocked API answers with the short id `PL1`. */
+const PLAYLIST_INPUT = 'PLZbXA4lyCtqoc4dKMILBiS-RmxvvMEqdc';
 
 /** @type {ReturnType<typeof createLocalStorageStub>} */
 let store;
@@ -55,28 +60,11 @@ function mockPlaylistFetch(videoIds, options = {}) {
 				}
 			]
 		},
-		{
-			items: videoIds.map((id, index) => ({
-				id: `item-${id}`,
-				snippet: {
-					title: `Title ${id}`,
-					position: index,
-					resourceId: { videoId: id },
-					thumbnails: { high: { url: `${id}.jpg` } }
-				},
-				contentDetails: { videoPublishedAt: '2024-01-01T00:00:00Z' }
-			}))
-		},
+		{ items: videoIds.map((id, index) => playlistItemResource(id, { position: index })) },
 		{ items: videoIds.map((id) => ({ id, contentDetails: { duration: 'PT1M' } })) }
 	];
 
-	const fetch = vi.fn(async () => ({
-		ok: true,
-		status: 200,
-		json: async () => responses.shift() ?? { items: [] }
-	}));
-	vi.stubGlobal('fetch', fetch);
-	return fetch;
+	return stubFetch(responses.map((body) => ({ body })));
 }
 
 afterEach(() => {
@@ -118,14 +106,14 @@ describe('importPlaylist', () => {
 	it('merges a re-import: ratings survive, new videos arrive, gone videos stay as unavailable', async () => {
 		const { library } = await boot();
 		mockPlaylistFetch(['v1', 'v2', 'v3']);
-		await library.importPlaylist('KEY', 'PL1');
+		await library.importPlaylist('KEY', PLAYLIST_INPUT);
 		const importedAt = /** @type {string} */ (library.activePlaylist?.importedAt);
 
 		library.rate('v1', 'S');
 		library.rate('v2', 'C');
 
 		mockPlaylistFetch(['v1', 'v3', 'v4'], { title: 'AMVs (renamed)' });
-		await library.importPlaylist('KEY', 'PL1');
+		await library.importPlaylist('KEY', PLAYLIST_INPUT);
 
 		const playlist = /** @type {any} */ (library.activePlaylist);
 		expect(library.playlists).toHaveLength(1);

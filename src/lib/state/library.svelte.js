@@ -38,6 +38,11 @@ import {
  */
 
 const STORAGE_KEY = 'library';
+/**
+ * Written into every persisted payload. Nothing reads it yet - it is what lets a
+ * future shape change migrate instead of discarding the user's ratings, and both
+ * loaders already tolerate unknown and missing fields.
+ */
 const STORAGE_VERSION = 1;
 
 /** Playlist that collects ratings from a legacy export we cannot match to a playlist. */
@@ -178,13 +183,9 @@ class Library {
 		if (rating !== null && !isRating(rating)) {
 			throw new TypeError(`"${rating}" is not one of ${RATING_ORDER.join('/')} or null.`);
 		}
-		const video = this.activePlaylist?.videos.find((candidate) => candidate.id === videoId);
-		if (!video) return false;
-
-		video.rating = rating;
-		this.#touchActive();
-		this.#persist();
-		return true;
+		return this.#updateVideo(videoId, (video) => {
+			video.rating = rating;
+		});
 	}
 
 	/**
@@ -195,13 +196,9 @@ class Library {
 	 * @returns {boolean} `false` when the active playlist has no such video.
 	 */
 	markUnavailable(videoId) {
-		const video = this.activePlaylist?.videos.find((candidate) => candidate.id === videoId);
-		if (!video) return false;
-
-		video.unavailable = true;
-		this.#touchActive();
-		this.#persist();
-		return true;
+		return this.#updateVideo(videoId, (video) => {
+			video.unavailable = true;
+		});
 	}
 
 	/**
@@ -221,7 +218,7 @@ class Library {
 			[order[i], order[j]] = [order[j], order[i]];
 		}
 		playlist.order = order;
-		this.#touchActive();
+		playlist.updatedAt = new Date().toISOString();
 		this.#persist();
 		return true;
 	}
@@ -235,7 +232,7 @@ class Library {
 		if (!playlist) return false;
 
 		playlist.order = reconcileOrder([], playlist.videos);
-		this.#touchActive();
+		playlist.updatedAt = new Date().toISOString();
 		this.#persist();
 		return true;
 	}
@@ -399,10 +396,22 @@ class Library {
 		return /** @type {Playlist} */ (this.playlists.find((playlist) => playlist.id === incoming.id));
 	}
 
-	/** @returns {void} */
-	#touchActive() {
+	/**
+	 * Change one video of the active playlist, then stamp and persist the playlist.
+	 *
+	 * @param {string} videoId
+	 * @param {(video: Video) => void} mutate
+	 * @returns {boolean} `false` when the active playlist has no such video.
+	 */
+	#updateVideo(videoId, mutate) {
 		const playlist = this.activePlaylist;
-		if (playlist) playlist.updatedAt = new Date().toISOString();
+		const video = playlist?.videos.find((candidate) => candidate.id === videoId);
+		if (!playlist || !video) return false;
+
+		mutate(video);
+		playlist.updatedAt = new Date().toISOString();
+		this.#persist();
+		return true;
 	}
 
 	/** @returns {void} */

@@ -34,6 +34,15 @@ class Session {
 
 	#index = $state(0);
 
+	/** @type {string|null} Video {@link jumpTo} forced into the queue past the filter. */
+	#pinnedId = $state(null);
+
+	/**
+	 * @type {Video[]} Everything the session is about, rated or not — the basis of
+	 * {@link progress}.
+	 */
+	#scope = $derived(library.availableVideos.filter((video) => this.#inScope(video)));
+
 	/**
 	 * @type {Video[]} The videos to rate, in playback order.
 	 *
@@ -44,12 +53,11 @@ class Session {
 	 * videos unratable).
 	 */
 	queue = $derived.by(() => {
-		const tiers = this.#tiers;
-		const filtered = tiers.length > 0;
-		return library.activeVideos.filter((video) => {
-			if (video.unavailable) return false;
-			if (video.rating === null) return this.#includeUnrated;
-			return filtered ? tiers.includes(video.rating) : !settings.skipRated;
+		const filtered = this.#tiers.length > 0;
+		return library.availableVideos.filter((video) => {
+			if (video.id === this.#pinnedId) return true;
+			if (!this.#inScope(video)) return false;
+			return video.rating === null || filtered || !settings.skipRated;
 		});
 	});
 
@@ -65,8 +73,22 @@ class Session {
 	/** @type {boolean} */
 	hasPrevious = $derived(this.index > 0);
 
-	/** @type {Progress} Rating progress of the whole active playlist. */
-	progress = $derived({ done: library.ratedCount, total: library.availableCount });
+	/** @type {Progress} How much of what this session covers is already rated. */
+	progress = $derived({
+		done: this.#scope.filter((video) => video.rating !== null).length,
+		total: this.#scope.length
+	});
+
+	/**
+	 * Is this video part of what the session covers, regardless of `skipRated`?
+	 *
+	 * @param {Video} video
+	 * @returns {boolean}
+	 */
+	#inScope(video) {
+		if (video.rating === null) return this.#includeUnrated;
+		return this.#tiers.length === 0 || this.#tiers.includes(video.rating);
+	}
 
 	/** @returns {QueueFilter} A snapshot of the current filter. */
 	get filter() {
@@ -94,6 +116,7 @@ class Session {
 			this.#tiers = RATING_ORDER.filter((rating) => selected.includes(rating));
 		}
 		if (filter.includeUnrated !== undefined) this.#includeUnrated = Boolean(filter.includeUnrated);
+		this.#pinnedId = null;
 		this.#index = 0;
 	}
 
@@ -138,14 +161,23 @@ class Session {
 	}
 
 	/**
-	 * Move to a specific video of the queue — used by `/rate?v=<videoId>`.
+	 * Move to a specific video — used by `/rate?v=<videoId>`.
+	 *
+	 * A playable video that the current filter excludes (an already rated one while
+	 * `skipRated` is on, say) is pinned into the queue instead of being refused:
+	 * following a deep link should never be answered with "not in your queue".
 	 *
 	 * @param {string} videoId
-	 * @returns {boolean} `false` when the video is not part of the current queue.
+	 * @returns {boolean} `false` when the active playlist cannot play that video.
 	 */
 	jumpTo(videoId) {
-		const target = this.queue.findIndex((video) => video.id === videoId);
-		if (target === -1) return false;
+		let target = this.queue.findIndex((video) => video.id === videoId);
+		if (target === -1) {
+			if (!library.availableVideos.some((video) => video.id === videoId)) return false;
+			this.#pinnedId = videoId;
+			target = this.queue.findIndex((video) => video.id === videoId);
+			if (target === -1) return false;
+		}
 		this.#index = target;
 		return true;
 	}
@@ -166,17 +198,8 @@ class Session {
 		// When the rating removed the video from the queue, the next one already slid
 		// into this index and advancing would skip it.
 		if (this.queue.some((candidate) => candidate.id === video.id)) this.next();
-		else this.#index = this.index;
 
 		return true;
-	}
-
-	/**
-	 * Back to the start of the queue.
-	 * @returns {void}
-	 */
-	restart() {
-		this.#index = 0;
 	}
 }
 

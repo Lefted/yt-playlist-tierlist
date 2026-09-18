@@ -20,11 +20,12 @@ function str(value) {
 }
 
 /**
+ * @template T
  * @param {unknown} value
- * @param {number} fallback
- * @returns {number}
+ * @param {T} fallback
+ * @returns {number|T} The value when it is a finite number, the fallback otherwise.
  */
-function int(value, fallback) {
+function finiteOr(value, fallback) {
 	return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
@@ -50,11 +51,8 @@ export function normalizeVideo(raw, index) {
 		thumbnail: str(source.thumbnail),
 		channelTitle: str(source.channelTitle),
 		publishedAt: str(source.publishedAt),
-		position: int(source.position, index),
-		durationSeconds:
-			typeof source.durationSeconds === 'number' && Number.isFinite(source.durationSeconds)
-				? source.durationSeconds
-				: null,
+		position: Math.trunc(finiteOr(source.position, index)),
+		durationSeconds: finiteOr(source.durationSeconds, null),
 		rating: isRating(source.rating) ? source.rating : null,
 		unavailable: source.unavailable === true || source.rating === 'unavailable'
 	};
@@ -82,7 +80,7 @@ export function normalizePlaylist(raw) {
 		description: str(source.description),
 		channelTitle: str(source.channelTitle),
 		thumbnail: str(source.thumbnail),
-		itemCount: int(source.itemCount, videos.length),
+		itemCount: Math.trunc(finiteOr(source.itemCount, videos.length)),
 		importedAt: str(source.importedAt),
 		updatedAt: str(source.updatedAt),
 		videos,
@@ -131,7 +129,7 @@ export function orderedVideos(playlist) {
 	const byId = new Map(playlist.videos.map((video) => [video.id, video]));
 	/** @type {Video[]} */
 	const result = [];
-	for (const id of playlist.order) {
+	for (const id of playlist.order ?? []) {
 		const video = byId.get(id);
 		if (!video) continue;
 		byId.delete(id);
@@ -182,7 +180,12 @@ export function mergePlaylist(existing, incoming, now) {
 		videos.push({
 			...fresh,
 			rating: old.rating ?? fresh.rating ?? null,
-			durationSeconds: fresh.durationSeconds ?? old.durationSeconds ?? null
+			durationSeconds: fresh.durationSeconds ?? old.durationSeconds ?? null,
+			// `unavailable` is sticky: the API happily lists videos that the player
+			// then refuses to embed, and markUnavailable() is the only place that
+			// knows about it. Clearing the flag would put them back in the queue on
+			// every re-import.
+			unavailable: old.unavailable || fresh.unavailable
 		});
 	}
 

@@ -47,6 +47,8 @@ place; the configuration lives in `components.json`.
   namespaced `ytpt:v1:<name>`.
 - `src/lib/youtube/api.js` — pure YouTube Data API calls (`parsePlaylistInput`,
   `fetchPlaylistMeta`, `fetchPlaylistVideos`) that fail with a typed `YouTubeApiError`.
+- `src/lib/playlist.js` — pure playlist operations (normalising untrusted data,
+  reconciling the playback order, merging a re-import) that the state modules build on.
 - `src/lib/state/*.svelte.js` — rune-based singletons: `settings`, `library`
   (playlists, ratings, import/export) and `session` (the rating queue).
 

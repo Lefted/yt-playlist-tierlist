@@ -6,27 +6,7 @@ import {
 	parsePlaylistInput,
 	YouTubeApiError
 } from './api.js';
-
-/**
- * A `fetch` that answers with the given bodies in order.
- *
- * @param {Array<{ body: any, status?: number, ok?: boolean }>} responses
- * @returns {import('vitest').Mock}
- */
-function mockFetch(responses) {
-	const fetch = vi.fn(async () => {
-		const next = responses.shift();
-		if (!next) throw new Error('fetch called more often than the test set up');
-		const status = next.status ?? 200;
-		return {
-			ok: next.ok ?? status < 400,
-			status,
-			json: async () => next.body
-		};
-	});
-	vi.stubGlobal('fetch', fetch);
-	return fetch;
-}
+import { playlistItemResource, stubFetch } from '../testing/fixtures.js';
 
 /**
  * @param {import('vitest').Mock} fetch
@@ -34,26 +14,6 @@ function mockFetch(responses) {
  */
 function calledUrls(fetch) {
 	return fetch.mock.calls.map((call) => new URL(call[0]));
-}
-
-/**
- * @param {string} videoId
- * @param {Partial<{ title: string, position: number, noResourceId: boolean }>} [options]
- * @returns {any}
- */
-function playlistItem(videoId, options = {}) {
-	return {
-		id: `item-${videoId}`,
-		snippet: {
-			title: options.title ?? `Title ${videoId}`,
-			description: 'desc',
-			position: options.position ?? 0,
-			videoOwnerChannelTitle: 'Uploader',
-			thumbnails: { high: { url: `https://i.ytimg.com/vi/${videoId}/hq.jpg` } },
-			resourceId: options.noResourceId ? {} : { kind: 'youtube#video', videoId }
-		},
-		contentDetails: { videoPublishedAt: '2024-05-05T00:00:00Z' }
-	};
 }
 
 /**
@@ -81,7 +41,26 @@ describe('parsePlaylistInput', () => {
 	});
 
 	it('trims whitespace', () => {
-		expect(parsePlaylistInput('  PLabc123  ')).toBe('PLabc123');
+		expect(parsePlaylistInput('  PLZbXA4lyCtqoc4dKMILBiS-RmxvvMEqdc  ')).toBe(
+			'PLZbXA4lyCtqoc4dKMILBiS-RmxvvMEqdc'
+		);
+	});
+
+	it('accepts the other playlist id prefixes', () => {
+		for (const id of ['UUZbXA4lyCtqoc4dKMILBiS', 'OLAK5uy_l1234567890abc', 'RDZbXA4lyCtqoc4d']) {
+			expect(parsePlaylistInput(id)).toBe(id);
+		}
+	});
+
+	it('does not mistake an arbitrary word for a bare id', () => {
+		expect(parsePlaylistInput('hello')).toBeNull();
+		expect(parsePlaylistInput('playlist')).toBeNull();
+		// Right prefix, far too short to be a real id.
+		expect(parsePlaylistInput('PLabc123')).toBeNull();
+	});
+
+	it('still trusts anything list= points at', () => {
+		expect(parsePlaylistInput('https://www.youtube.com/playlist?list=WL')).toBe('WL');
 	});
 
 	it('reads list= from a watch URL', () => {
@@ -136,7 +115,7 @@ describe('parseIsoDuration', () => {
 
 describe('fetchPlaylistMeta', () => {
 	it('maps the playlist resource', async () => {
-		const fetch = mockFetch([
+		const fetch = stubFetch([
 			{
 				body: {
 					items: [
@@ -172,7 +151,7 @@ describe('fetchPlaylistMeta', () => {
 	});
 
 	it('fails with playlistNotFound for an empty result', async () => {
-		mockFetch([{ body: { items: [] } }]);
+		stubFetch([{ body: { items: [] } }]);
 		await expect(fetchPlaylistMeta('KEY', 'PLnope')).rejects.toMatchObject({
 			name: 'YouTubeApiError',
 			reason: 'playlistNotFound'
@@ -180,7 +159,7 @@ describe('fetchPlaylistMeta', () => {
 	});
 
 	it('fails with keyInvalid when no key was given', async () => {
-		const fetch = mockFetch([]);
+		const fetch = stubFetch([]);
 		await expect(fetchPlaylistMeta('', 'PLabc')).rejects.toMatchObject({ reason: 'keyInvalid' });
 		expect(fetch).not.toHaveBeenCalled();
 	});
@@ -188,17 +167,20 @@ describe('fetchPlaylistMeta', () => {
 
 describe('fetchPlaylistVideos', () => {
 	it('walks every page and resolves durations', async () => {
-		const fetch = mockFetch([
+		const fetch = stubFetch([
 			{
 				body: {
-					items: [playlistItem('vid1', { position: 0 }), playlistItem('vid2', { position: 1 })],
+					items: [
+						playlistItemResource('vid1', { position: 0 }),
+						playlistItemResource('vid2', { position: 1 })
+					],
 					nextPageToken: 'PAGE2',
 					pageInfo: { totalResults: 3 }
 				}
 			},
 			{
 				body: {
-					items: [playlistItem('vid3', { position: 2 })],
+					items: [playlistItemResource('vid3', { position: 2 })],
 					pageInfo: { totalResults: 3 }
 				}
 			},
@@ -247,9 +229,9 @@ describe('fetchPlaylistVideos', () => {
 
 	it('asks for durations in batches of 50', async () => {
 		const items = Array.from({ length: 60 }, (_, index) =>
-			playlistItem(`vid${index}`, { position: index })
+			playlistItemResource(`vid${index}`, { position: index })
 		);
-		const fetch = mockFetch([
+		const fetch = stubFetch([
 			{ body: { items, pageInfo: { totalResults: 60 } } },
 			{ body: { items: [] } },
 			{ body: { items: [] } }
@@ -265,14 +247,14 @@ describe('fetchPlaylistVideos', () => {
 	});
 
 	it('flags private, deleted and id-less entries as unavailable', async () => {
-		mockFetch([
+		stubFetch([
 			{
 				body: {
 					items: [
-						playlistItem('vid1', { title: 'Private video' }),
-						playlistItem('vid2', { title: 'Deleted video' }),
-						playlistItem('vid3', { noResourceId: true }),
-						playlistItem('vid4')
+						playlistItemResource('vid1', { title: 'Private video' }),
+						playlistItemResource('vid2', { title: 'Deleted video' }),
+						playlistItemResource('vid3', { noResourceId: true }),
+						playlistItemResource('vid4')
 					]
 				}
 			},
@@ -288,8 +270,8 @@ describe('fetchPlaylistVideos', () => {
 	});
 
 	it('skips the duration request when nothing is playable', async () => {
-		const fetch = mockFetch([
-			{ body: { items: [playlistItem('vid1', { title: 'Private video' })] } }
+		const fetch = stubFetch([
+			{ body: { items: [playlistItemResource('vid1', { title: 'Private video' })] } }
 		]);
 
 		await fetchPlaylistVideos('KEY', 'PLabc');
@@ -304,7 +286,7 @@ describe('error mapping', () => {
 	 * @returns {Promise<YouTubeApiError>}
 	 */
 	async function failure(body, status) {
-		mockFetch([{ body, status, ok: false }]);
+		stubFetch([{ body, status, ok: false }]);
 		try {
 			await fetchPlaylistMeta('KEY', 'PLabc');
 		} catch (error) {
@@ -350,7 +332,7 @@ describe('error mapping', () => {
 	});
 
 	it('maps an error body that arrives with HTTP 200', async () => {
-		mockFetch([{ body: apiError('quotaExceeded'), status: 200 }]);
+		stubFetch([{ body: apiError('quotaExceeded'), status: 200 }]);
 		await expect(fetchPlaylistMeta('KEY', 'PLabc')).rejects.toMatchObject({
 			reason: 'quotaExceeded'
 		});
