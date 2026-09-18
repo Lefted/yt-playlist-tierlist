@@ -1,243 +1,140 @@
 <script>
+	/**
+	 * Browse: the library view. Stats and the filterable video list in the main
+	 * column, the playlist itself in the side column (below the list on mobile).
+	 *
+	 * The page owns the filter values; `components/browse/filters.js` owns the rules
+	 * and `$lib/state/library.svelte.js` owns the data.
+	 */
+	import Plus from '@lucide/svelte/icons/plus';
+
 	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import { Progress } from '$lib/components/ui/progress/index.js';
-	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
-	import ListFilter from '@lucide/svelte/icons/list-filter';
+	import EmptyState from '$lib/components/browse/EmptyState.svelte';
+	import ImportDialog from '$lib/components/browse/ImportDialog.svelte';
+	import PlaylistCard from '$lib/components/browse/PlaylistCard.svelte';
+	import StatsRow from '$lib/components/browse/StatsRow.svelte';
+	import Toolbar from '$lib/components/browse/Toolbar.svelte';
+	import VideoCard from '$lib/components/browse/VideoCard.svelte';
+	import {
+		DEFAULT_SORT,
+		PAGE_SIZE,
+		createFilter,
+		filterVideos,
+		sortVideos
+	} from '$lib/components/browse/filters.js';
+	import { library } from '$lib/state/library.svelte.js';
 
-	import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
-	import { Separator } from '$lib/components/ui/separator/index.js';
+	let importOpen = $state(false);
+	let importInput = $state('');
 
-	import Player from '$lib/components/Player.svelte';
-	import { RATING_ORDER } from '$lib/types.js';
+	/** @type {import('$lib/components/browse/filters.js').BrowseFilter} */
+	let filter = $state(createFilter());
+	/** @type {import('$lib/components/browse/filters.js').SortKey} */
+	let sort = $state(DEFAULT_SORT);
+	let visibleCount = $state(PAGE_SIZE);
 
-	const tiers = RATING_ORDER;
+	const playlist = $derived(library.activePlaylist);
+	const videos = $derived(library.activeVideos);
+	const matches = $derived(sortVideos(filterVideos(videos, filter), sort));
+	const visible = $derived(matches.slice(0, visibleCount));
+	const hasMore = $derived(matches.length > visible.length);
+
+	/** Identity of everything that narrows the list — rating a video is not part of it. */
+	const filterKey = $derived(JSON.stringify([playlist?.id ?? null, filter, sort]));
+
+	$effect(() => {
+		// A different filter shows a different set, so the paging starts over.
+		// Reading `filterKey` is the only subscription here: `visibleCount` is
+		// written but never read, so "Show more" does not re-trigger this.
+		filterKey;
+		visibleCount = PAGE_SIZE;
+	});
+
+	/**
+	 * @param {string} [prefill] - Playlist id to refresh; empty for a fresh import.
+	 * @returns {void}
+	 */
+	function openImport(prefill = '') {
+		importInput = prefill;
+		importOpen = true;
+	}
+
+	/**
+	 * Shuffle and reset only show in the playlist order, so both switch back to it.
+	 * @returns {void}
+	 */
+	function shuffle() {
+		sort = DEFAULT_SORT;
+		library.shuffle();
+	}
+
+	/** @returns {void} */
+	function resetOrder() {
+		sort = DEFAULT_SORT;
+		library.resetOrder();
+	}
 </script>
 
-<main class="grid flex-1 items-start gap-4 p-4 sm:px-6 md:gap-8 lg:grid-cols-3 xl:grid-cols-3">
-	<div class="grid auto-rows-max items-start gap-4 md:gap-8 lg:col-span-2">
-		<div class="grid gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
-			<Card.Root
-				class="sm:col-span-2"
-				data-x-chunk-name="dashboard-05-chunk-0"
-				data-x-chunk-description="A card for a playlist dashboard with a description and a button to improt a new playlist."
-			>
-				<Card.Header class="pb-3">
-					<Card.Title>Your Playlist</Card.Title>
-					<Card.Description class="max-w-lg leading-relaxed text-balance">
-						Use your own custom youtube API_KEY to import your playlist or load an existing
-						collection of videos.
-					</Card.Description>
-				</Card.Header>
-				<Card.Footer>
-					<Button onclick={() => {}}>Import New Playlist</Button>
-				</Card.Footer>
-			</Card.Root>
-			<Card.Root
-				data-x-chunk-name="dashboard-05-chunk-1"
-				data-x-chunk-description="A stats card showing the number of imported videos and a progress bar indicating how many videos have been ranked."
-			>
-				<Card.Header class="pb-2">
-					<Card.Description>This Playlist</Card.Description>
-					<Card.Title class="text-4xl">915</Card.Title>
-				</Card.Header>
-				<Card.Content>
-					<div class="text-muted-foreground text-xs">total videos</div>
-				</Card.Content>
-				<Card.Footer>
-					<Progress value={25} aria-label="25% ranked" />
-				</Card.Footer>
-			</Card.Root>
-			<Card.Root
-				data-x-chunk-name="dashboard-05-chunk-1"
-				data-x-chunk-description="A stats card showing the number of imported videos and a progress bar indicating how many videos have been ranked."
-			>
-				<Card.Header class="pb-2">
-					<Card.Description>Top Videos</Card.Description>
-					<Card.Title class="text-4xl">405</Card.Title>
-				</Card.Header>
-				<Card.Content>
-					<div class="text-muted-foreground text-xs">S-tier videos</div>
-				</Card.Content>
-				<Card.Footer>
-					<Progress value={13} aria-label="13% s-tier videos" />
-				</Card.Footer>
-			</Card.Root>
-		</div>
+<svelte:head>
+	<title>Browse · YT Tierlist</title>
+</svelte:head>
 
-		<Player />
+<main class="mx-auto flex w-full max-w-[1536px] flex-1 flex-col gap-4 p-4 sm:px-6 md:gap-6">
+	{#if !playlist}
+		<EmptyState onimport={() => openImport()} />
+	{:else}
+		<div class="grid items-start gap-4 md:gap-6 lg:grid-cols-3">
+			<div class="grid min-w-0 auto-rows-max gap-4 md:gap-6 lg:col-span-2">
+				<StatsRow
+					total={videos.length}
+					rated={library.ratedCount}
+					available={library.availableCount}
+					sTier={library.counts.S}
+				/>
 
-		<div class="flex items-center">
-			<ToggleGroup.Root variant="outline" type="multiple">
-				{#each tiers as tier (tier)}
-					<ToggleGroup.Item value={tier} aria-label={`Toggle ${tier} tier`}>
-						<h2>{tier}</h2>
-					</ToggleGroup.Item>
-				{/each}
-			</ToggleGroup.Root>
+				<div class="grid gap-3">
+					<Toolbar bind:filter bind:sort onshuffle={shuffle} onresetorder={resetOrder} />
 
-			<div class="ml-auto flex items-center gap-2">
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger>
-						{#snippet child({ props })}
-							<Button {...props} variant="outline" size="sm" class="h-7 gap-1 text-sm">
-								<ListFilter class="h-3.5 w-3.5" />
-								<span class="sr-only sm:not-sr-only">Filter</span>
-							</Button>
-						{/snippet}
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="end">
-						<DropdownMenu.Label>Filter by</DropdownMenu.Label>
-						<DropdownMenu.Separator />
-						<DropdownMenu.CheckboxItem checked>Hide unavailable</DropdownMenu.CheckboxItem>
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
+					<p class="text-muted-foreground text-xs" aria-live="polite">
+						Showing {visible.length} of {matches.length}
+						{matches.length === 1 ? 'video' : 'videos'}
+						{#if matches.length !== videos.length}
+							(filtered from {videos.length})
+						{/if}
+					</p>
+				</div>
+
+				{#if matches.length === 0}
+					<p class="text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
+						No video matches these filters.
+					</p>
+				{:else}
+					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+						{#each visible as video (video.id)}
+							<VideoCard {video} onrate={(rating) => library.rate(video.id, rating)} />
+						{/each}
+					</div>
+				{/if}
+
+				{#if hasMore}
+					<div class="flex justify-center">
+						<Button variant="outline" onclick={() => (visibleCount += PAGE_SIZE)}>
+							Show more ({matches.length - visible.length} left)
+						</Button>
+					</div>
+				{/if}
+			</div>
+
+			<!-- DOM order puts this after the list, so on mobile it lands below it. -->
+			<div class="grid min-w-0 auto-rows-max gap-4">
+				<PlaylistCard {playlist} onreimport={() => openImport(playlist.id)} />
+				<Button variant="outline" onclick={() => openImport()}>
+					<Plus class="size-4" />
+					Import another playlist
+				</Button>
 			</div>
 		</div>
-	</div>
-
-	<div>
-		<Card.Root
-			class="overflow-hidden"
-			data-x-chunk-name="dashboard-05-chunk-4"
-			data-x-chunk-description="An order details card with order details, shipping information, customer information and payment information."
-		>
-			<Card.Header class="bg-muted/50 flex flex-row items-start">
-				<div class="grid gap-0.5">
-					<Card.Title class="group flex items-center gap-2 text-lg">Playlist Name</Card.Title>
-					<Card.Description>Created: November 23, 2023</Card.Description>
-				</div>
-				<div class="ml-auto flex items-center gap-1">
-					<Button size="sm" variant="outline" class="h-8 gap-1">
-						<!-- <Truck class="h-3.5 w-3.5" /> -->
-						<span class="lg:sr-only xl:not-sr-only xl:whitespace-nowrap"> Open in YouTube </span>
-					</Button>
-					<DropdownMenu.Root>
-						<DropdownMenu.Trigger>
-							{#snippet child({ props })}
-								<Button {...props} size="icon" variant="outline" class="h-8 w-8">
-									<EllipsisVertical class="h-3.5 w-3.5" />
-									<span class="sr-only">More</span>
-								</Button>
-							{/snippet}
-						</DropdownMenu.Trigger>
-						<DropdownMenu.Content align="end">
-							<DropdownMenu.Item>Export</DropdownMenu.Item>
-						</DropdownMenu.Content>
-					</DropdownMenu.Root>
-				</div>
-			</Card.Header>
-			<Card.Content class="p-6 text-sm">
-				<div class="grid gap-3">
-					<div class="font-semibold">Order Details</div>
-					<ul class="grid gap-3">
-						<li class="flex items-center justify-between">
-							<span class="text-muted-foreground">
-								Glimmer Lamps x <span>2</span>
-							</span>
-							<span>$250.00</span>
-						</li>
-						<li class="flex items-center justify-between">
-							<span class="text-muted-foreground">
-								Aqua Filters x <span>1</span>
-							</span>
-							<span>$49.00</span>
-						</li>
-					</ul>
-					<Separator class="my-2" />
-					<ul class="grid gap-3">
-						<li class="flex items-center justify-between">
-							<span class="text-muted-foreground">Subtotal</span>
-							<span>$299.00</span>
-						</li>
-						<li class="flex items-center justify-between">
-							<span class="text-muted-foreground">Shipping</span>
-							<span>$5.00</span>
-						</li>
-						<li class="flex items-center justify-between">
-							<span class="text-muted-foreground">Tax</span>
-							<span>$25.00</span>
-						</li>
-						<li class="flex items-center justify-between font-semibold">
-							<span class="text-muted-foreground">Total</span>
-							<span>$329.00</span>
-						</li>
-					</ul>
-				</div>
-				<Separator class="my-4" />
-				<div class="grid grid-cols-2 gap-4">
-					<div class="grid gap-3">
-						<div class="font-semibold">Shipping Information</div>
-						<address class="text-muted-foreground grid gap-0.5 not-italic">
-							<span>Liam Johnson</span>
-							<span>1234 Main St.</span>
-							<span>Anytown, CA 12345</span>
-						</address>
-					</div>
-					<div class="grid auto-rows-max gap-3">
-						<div class="font-semibold">Billing Information</div>
-						<div class="text-muted-foreground">Same as shipping address</div>
-					</div>
-				</div>
-				<Separator class="my-4" />
-				<div class="grid gap-3">
-					<div class="font-semibold">Customer Information</div>
-					<dl class="grid gap-3">
-						<div class="flex items-center justify-between">
-							<dt class="text-muted-foreground">Customer</dt>
-							<dd>Liam Johnson</dd>
-						</div>
-						<div class="flex items-center justify-between">
-							<dt class="text-muted-foreground">Email</dt>
-							<dd>
-								<a href="mailto:">liam@acme.com</a>
-							</dd>
-						</div>
-						<div class="flex items-center justify-between">
-							<dt class="text-muted-foreground">Phone</dt>
-							<dd>
-								<a href="tel:">+1 234 567 890</a>
-							</dd>
-						</div>
-					</dl>
-				</div>
-				<Separator class="my-4" />
-				<div class="grid gap-3">
-					<div class="font-semibold">Payment Information</div>
-					<dl class="grid gap-3">
-						<div class="flex items-center justify-between">
-							<dt class="text-muted-foreground flex items-center gap-1">
-								<!-- <CreditCard class="h-4 w-4" /> -->
-								Visa
-							</dt>
-							<dd>**** **** **** 4532</dd>
-						</div>
-					</dl>
-				</div>
-			</Card.Content>
-
-			<Card.Footer class="bg-muted/50 flex flex-row items-center border-t px-6 py-3">
-				<div class="text-muted-foreground text-xs">
-					Updated <time dateTime="2023-11-23">November 23, 2023</time>
-				</div>
-				<!-- <Pagination.Root count={10} class="ml-auto mr-0 w-auto">
-              <Pagination.Content>
-                <Pagination.Item>
-                  <Button size="icon" variant="outline" class="h-6 w-6">
-                    <ChevronLeft class="h-3.5 w-3.5" />
-                    <span class="sr-only">Previous Order</span>
-                  </Button>
-                </Pagination.Item>
-                <Pagination.Item>
-                  <Button size="icon" variant="outline" class="h-6 w-6">
-                    <ChevronRight class="h-3.5 w-3.5" />
-                    <span class="sr-only">Next Order</span>
-                  </Button>
-                </Pagination.Item>
-              </Pagination.Content>
-            </Pagination.Root> -->
-			</Card.Footer>
-		</Card.Root>
-	</div>
+	{/if}
 </main>
+
+<ImportDialog bind:open={importOpen} initialInput={importInput} />

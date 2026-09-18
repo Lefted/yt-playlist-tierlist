@@ -92,6 +92,16 @@ place; the configuration lives in `components.json`.
   reconciling the playback order, merging a re-import) that the state modules build on.
 - `src/lib/state/*.svelte.js` — rune-based singletons: `settings`, `library`
   (playlists, ratings, import/export) and `session` (the rating queue).
+- `src/lib/format.js` — display helpers (`formatDuration`, `formatDate`,
+  `exportFileName`); `src/lib/youtube/urls.js` — the youtube.com links and the
+  thumbnail fallback. Both are total: unusable input becomes an empty string.
 
 The original vanilla-JS prototype (`index.html`, `index.js`, `start-server.sh`) was
 removed once its logic had been ported into these modules.
+
+## Pages
+
+`/browse` is the library view: stats, a filterable, sortable video grid that pages
+in 60 cards at a time, and the playlist card with import/export. Its rules live in
+`src/lib/components/browse/filters.js` (bucket filter, search, sort) and its error
+copy in `errors.js`, both unit-tested; the components next to them render only.
