@@ -6,6 +6,7 @@
 	import AppHeader from '$lib/components/shell/AppHeader.svelte';
 	import BottomTabBar from '$lib/components/shell/BottomTabBar.svelte';
 	import ReloadPrompt from '$lib/pwa/ReloadPrompt.svelte';
+	import { Toaster } from '$lib/components/ui/sonner/index.js';
 	import { network } from '$lib/pwa/network.svelte.js';
 
 	let { children } = $props();
@@ -51,4 +52,6 @@
 
 	<BottomTabBar />
 	<ReloadPrompt />
+	<!-- Top, because the bottom of small screens belongs to the tab bar and the Rate page's tier bar. -->
+	<Toaster position="top-center" />
 </div>
