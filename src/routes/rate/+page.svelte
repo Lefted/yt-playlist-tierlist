@@ -204,6 +204,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Rate · YT Tierlist</title>
+</svelte:head>
+
 <svelte:window onkeydown={handleKeydown} />
 
 {#if !library.activePlaylist}
