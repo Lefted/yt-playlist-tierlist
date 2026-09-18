@@ -1,12 +1,13 @@
 <script>
 	/**
 	 * The four numbers that describe an imported playlist at a glance.
-	 * Everything is read straight off the library, so it updates with every rating.
+	 * The page passes them in from the library, so this component stays a pure
+	 * rendering of whatever it is handed.
 	 */
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Progress } from '$lib/components/ui/progress/index.js';
 	import TierBadge from '$lib/components/TierBadge.svelte';
-	import { percentOf } from './format.js';
+	import { percentOf } from '$lib/utils.js';
 
 	/**
 	 * @typedef {Object} Props

@@ -7,8 +7,6 @@
 	 */
 	import { untrack } from 'svelte';
 	import Loader from '@lucide/svelte/icons/loader-circle';
-	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-	import Info from '@lucide/svelte/icons/info';
 
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -19,18 +17,18 @@
 	import { library } from '$lib/state/library.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
 	import { parsePlaylistInput } from '$lib/youtube/api.js';
+	import { percentOf } from '$lib/utils.js';
 	import { importErrorMessage } from './errors.js';
-	import { percentOf } from './format.js';
+	import Notice from './Notice.svelte';
 
 	/**
 	 * @typedef {Object} Props
 	 * @property {boolean} open - Bindable; the page owns it so the toolbar and the empty state can both open the dialog.
 	 * @property {string} [initialInput] - Pre-filled playlist id, used by "Re-import / refresh".
-	 * @property {(playlist: import('$lib/types.js').Playlist) => void} [onimported]
 	 */
 
 	/** @type {Props} */
-	let { open = $bindable(false), initialInput = '', onimported } = $props();
+	let { open = $bindable(false), initialInput = '' } = $props();
 
 	let apiKey = $state(settings.apiKey);
 	let input = $state('');
@@ -93,13 +91,12 @@
 		// not cost the user the key they just typed.
 		settings.apiKey = apiKey;
 		try {
-			const playlist = await library.importPlaylist(settings.apiKey, input, {
+			await library.importPlaylist(settings.apiKey, input, {
 				onProgress: (next) => {
 					progress = next;
 				}
 			});
 			open = false;
-			onimported?.(playlist);
 		} catch (cause) {
 			error = importErrorMessage(cause);
 		} finally {
@@ -176,16 +173,11 @@
 			</div>
 
 			{#if known}
-				<p
-					class="text-muted-foreground bg-muted/50 flex items-start gap-2 rounded-lg border p-3 text-xs"
-				>
-					<Info class="mt-px size-4 shrink-0" />
-					<span>
-						<span class="text-foreground font-medium">{known.title}</span> is already imported. Re-importing
-						refreshes titles and adds new videos — your ratings are kept, and videos that disappeared
-						from the playlist stay in the list, flagged as unavailable.
-					</span>
-				</p>
+				<Notice>
+					<span class="text-foreground font-medium">{known.title}</span> is already imported. Re-importing
+					refreshes titles and adds new videos — your ratings are kept, and videos that disappeared from
+					the playlist stay in the list, flagged as unavailable.
+				</Notice>
 			{/if}
 
 			{#if busy}
@@ -199,13 +191,7 @@
 			{/if}
 
 			{#if error}
-				<p
-					class="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-lg border p-3 text-xs"
-					role="alert"
-				>
-					<TriangleAlert class="mt-px size-4 shrink-0" />
-					<span>{error}</span>
-				</p>
+				<Notice tone="error">{error}</Notice>
 			{/if}
 
 			<Dialog.Footer class="gap-2 sm:justify-end">

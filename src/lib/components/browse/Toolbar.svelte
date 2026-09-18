@@ -1,7 +1,7 @@
 <script>
 	/**
-	 * Everything that narrows or reorders the video list. The page owns the values;
-	 * this component only renders them and reports changes back.
+	 * Everything that narrows or reorders the video list. The page owns the filter;
+	 * this component only renders it and writes changes back through the binding.
 	 */
 	import ListFilter from '@lucide/svelte/icons/list-filter';
 	import Search from '@lucide/svelte/icons/search';
@@ -20,37 +20,26 @@
 
 	/**
 	 * @typedef {Object} Props
-	 * @property {import('$lib/types.js').Rating[]} tiers - Bindable; selected tiers.
-	 * @property {boolean} unrated - Bindable; whether the "Unrated" bucket is selected.
-	 * @property {string} search - Bindable.
-	 * @property {boolean} hideUnavailable - Bindable.
+	 * @property {import('./filters.js').BrowseFilter} filter - Bindable; the page's single filter object.
 	 * @property {import('./filters.js').SortKey} sort - Bindable.
 	 * @property {() => void} onshuffle
 	 * @property {() => void} onresetorder
 	 */
 
 	/** @type {Props} */
-	let {
-		tiers = $bindable([]),
-		unrated = $bindable(false),
-		search = $bindable(''),
-		hideUnavailable = $bindable(true),
-		sort = $bindable('playlist'),
-		onshuffle,
-		onresetorder
-	} = $props();
+	let { filter = $bindable(), sort = $bindable('playlist'), onshuffle, onresetorder } = $props();
 
 	const sortLabel = $derived(
 		SORT_OPTIONS.find((option) => option.value === sort)?.label ?? SORT_OPTIONS[0].label
 	);
 
 	/**
-	 * The tier toggles and the "Unrated" toggle live in one group, so the value is
-	 * a mixed list of tiers plus the `unrated` sentinel.
+	 * The tier toggles and the "Unrated" toggle are one selection, so the toggle
+	 * group's value is a mixed list of tiers plus this sentinel.
 	 */
 	const UNRATED = 'unrated';
 
-	const buckets = $derived(unrated ? [...tiers, UNRATED] : [...tiers]);
+	const buckets = $derived(filter.unrated ? [...filter.tiers, UNRATED] : [...filter.tiers]);
 
 	/**
 	 * @param {string[] | undefined} next
@@ -58,8 +47,8 @@
 	 */
 	function setBuckets(next) {
 		const values = next ?? [];
-		unrated = values.includes(UNRATED);
-		tiers = /** @type {import('$lib/types.js').Rating[]} */ (
+		filter.unrated = values.includes(UNRATED);
+		filter.tiers = /** @type {import('$lib/types.js').Rating[]} */ (
 			values.filter((value) => value !== UNRATED)
 		);
 	}
@@ -105,7 +94,7 @@
 				type="search"
 				placeholder="Search title or channel"
 				aria-label="Search videos"
-				bind:value={search}
+				bind:value={filter.search}
 				class="pl-8"
 			/>
 		</div>
@@ -119,30 +108,34 @@
 			</Select.Content>
 		</Select.Root>
 
+		<Button variant="outline" size="icon" title="Shuffle the playlist order" onclick={onshuffle}>
+			<Shuffle class="size-4" />
+			<span class="sr-only">Shuffle the playlist order</span>
+		</Button>
+		<Button
+			variant="outline"
+			size="icon"
+			title="Back to the original playlist order"
+			onclick={onresetorder}
+		>
+			<RotateCcw class="size-4" />
+			<span class="sr-only">Back to the original playlist order</span>
+		</Button>
+
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}
-					<Button {...props} variant="outline" size="icon" title="Filter and order">
+					<Button {...props} variant="outline" size="icon" title="More filters">
 						<ListFilter class="size-4" />
-						<span class="sr-only">Filter and order</span>
+						<span class="sr-only">More filters</span>
 					</Button>
 				{/snippet}
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="end" class="w-56">
 				<DropdownMenu.Label>Filter</DropdownMenu.Label>
-				<DropdownMenu.CheckboxItem bind:checked={hideUnavailable}>
+				<DropdownMenu.CheckboxItem bind:checked={filter.hideUnavailable}>
 					Hide unavailable
 				</DropdownMenu.CheckboxItem>
-				<DropdownMenu.Separator />
-				<DropdownMenu.Label>Playlist order</DropdownMenu.Label>
-				<DropdownMenu.Item onSelect={onshuffle}>
-					<Shuffle class="size-4" />
-					Shuffle
-				</DropdownMenu.Item>
-				<DropdownMenu.Item onSelect={onresetorder}>
-					<RotateCcw class="size-4" />
-					Reset order
-				</DropdownMenu.Item>
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>
 	</div>

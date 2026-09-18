@@ -16,7 +16,8 @@ import { RATING_ORDER } from '$lib/types.js';
  */
 
 /**
- * What the toolbar narrows the list down to.
+ * What the toolbar narrows the list down to. The four values travel together
+ * everywhere (page state, toolbar binding, `filterVideos`), so they are one object.
  *
  * `tiers` and `unrated` together form one bucket selection: with nothing selected
  * every video passes, otherwise a video has to fall into one of the chosen buckets.
@@ -27,6 +28,16 @@ import { RATING_ORDER } from '$lib/types.js';
  * @property {string} [search] - Free text over title and channel.
  * @property {boolean} [hideUnavailable] - Drop videos the player cannot show.
  */
+
+/**
+ * The filter a freshly opened page starts from: nothing selected, no search, and
+ * unavailable videos out of the way.
+ *
+ * @returns {Required<BrowseFilter>} A new object every call, safe to hand to `$state`.
+ */
+export function createFilter() {
+	return { tiers: [], unrated: false, search: '', hideUnavailable: true };
+}
 
 /** @type {{ value: SortKey, label: string }[]} */
 export const SORT_OPTIONS = [

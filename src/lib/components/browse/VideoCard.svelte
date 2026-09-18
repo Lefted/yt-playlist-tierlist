@@ -5,13 +5,13 @@
 	 */
 	import { resolve } from '$app/paths';
 	import Play from '@lucide/svelte/icons/play';
-	import ExternalLink from '@lucide/svelte/icons/external-link';
 
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import TierBadge from '$lib/components/TierBadge.svelte';
 	import TierPicker from '$lib/components/TierPicker.svelte';
-	import { formatDuration, thumbnailFor, videoUrl } from './format.js';
+	import { formatDuration } from '$lib/format.js';
+	import { thumbnailFor } from '$lib/youtube/urls.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -24,12 +24,12 @@
 
 	const thumbnail = $derived(thumbnailFor(video));
 	const duration = $derived(formatDuration(video.durationSeconds));
-	const watchUrl = $derived(videoUrl(video.id));
 	// The Rate page reads `?v=` to start the session at this video; `resolve` keeps
 	// the link correct under a non-root base path.
 	const rateHref = $derived(`${resolve('/rate')}?v=${encodeURIComponent(video.id)}`);
 </script>
 
+<!-- `data-video-id` is the DOM hook the browser smoke tests address cards by. -->
 <article
 	class="bg-card text-card-foreground flex flex-col overflow-hidden rounded-xl border shadow-sm"
 	class:opacity-60={video.unavailable}
@@ -86,27 +86,17 @@
 				label={`Rate ${video.title || 'this video'}`}
 			/>
 
-			<div class="flex items-center gap-1">
-				{#if watchUrl}
-					<Button
-						href={watchUrl}
-						target="_blank"
-						rel="noreferrer"
-						variant="ghost"
-						size="icon-sm"
-						title="Open on YouTube"
-					>
-						<ExternalLink class="size-4" />
-						<span class="sr-only">Open {video.title || 'this video'} on YouTube</span>
-					</Button>
-				{/if}
-				{#if !video.unavailable}
-					<Button href={rateHref} variant="outline" size="sm" class="h-7 gap-1 px-2 text-xs">
-						<Play class="size-3.5" />
-						Rate
-					</Button>
-				{/if}
-			</div>
+			<!--
+				An unavailable video gets no Rate link: the rating session drops
+				unavailable videos from its queue, so `/rate?v=<id>` could not start
+				there (see the queue rule in src/lib/state/session.svelte.js).
+			-->
+			{#if !video.unavailable}
+				<Button href={rateHref} variant="outline" size="sm" class="h-7 gap-1 px-2 text-xs">
+					<Play class="size-3.5" />
+					Rate
+				</Button>
+			{/if}
 		</div>
 	</div>
 </article>

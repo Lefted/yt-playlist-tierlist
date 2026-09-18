@@ -18,8 +18,10 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 
 	import { library } from '$lib/state/library.svelte.js';
-	import { exportFileName, formatDate, playlistUrl } from './format.js';
-	import { importErrorMessage } from './errors.js';
+	import { exportFileName, formatDate } from '$lib/format.js';
+	import { playlistUrl } from '$lib/youtube/urls.js';
+	import { applyLibraryFile, takeFile } from './json-file.js';
+	import Notice from './Notice.svelte';
 
 	/**
 	 * @typedef {Object} Props
@@ -33,30 +35,43 @@
 	/** @type {HTMLInputElement | null} */
 	let fileInput = $state(null);
 	let confirmRemove = $state(false);
-	/** @type {{ tone: 'ok' | 'error', text: string } | null} */
+	/** @type {import('./json-file.js').Notice | null} */
 	let notice = $state(null);
 
+	// Empty for the local `legacy-import` collection: YouTube never had that
+	// playlist, so neither the link nor a refresh could work.
 	const url = $derived(playlistUrl(playlist.id));
+	const onYouTube = $derived(url !== '');
+
 	const playlistOptions = $derived(
 		library.playlists.map((entry) => ({ value: entry.id, label: entry.title || entry.id }))
 	);
 
 	/**
 	 * Hand the export to the browser as a download. Blob + object URL rather than a
-	 * data: URL, which some browsers cap at a few megabytes — a 1000-video library
+	 * `data:` URL, which some browsers cap at a few megabytes — a 1000-video library
 	 * is well past that.
 	 *
 	 * @returns {void}
 	 */
 	function exportJson() {
-		const blob = new Blob([library.exportJson()], { type: 'application/json' });
-		const href = URL.createObjectURL(blob);
-		const anchor = document.createElement('a');
-		anchor.href = href;
-		anchor.download = exportFileName();
-		anchor.click();
-		URL.revokeObjectURL(href);
-		notice = { tone: 'ok', text: `Exported ${library.playlists.length} playlist(s).` };
+		/** @type {string} */
+		let href = '';
+		try {
+			const blob = new Blob([library.exportJson()], { type: 'application/json' });
+			href = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = href;
+			anchor.download = exportFileName();
+			anchor.click();
+			notice = { tone: 'ok', text: `Exported ${library.playlists.length} playlist(s).` };
+		} catch {
+			notice = { tone: 'error', text: 'The export could not be written. Try again.' };
+		} finally {
+			// Not synchronous: Firefox and Safari can still be reading the blob when
+			// the click returns, and revoking here would abort the download.
+			if (href) setTimeout(() => URL.revokeObjectURL(href), 60_000);
+		}
 	}
 
 	/**
@@ -64,21 +79,9 @@
 	 * @returns {Promise<void>}
 	 */
 	async function importJson(event) {
-		const target = /** @type {HTMLInputElement} */ (event.currentTarget);
-		const file = target.files?.[0];
-		// Reset the picker so choosing the same file twice fires `change` again.
-		target.value = '';
+		const file = takeFile(event);
 		if (!file) return;
-
-		try {
-			const summary = library.importJson(await file.text());
-			notice = {
-				tone: 'ok',
-				text: `Imported ${summary.videos} video(s) from ${summary.playlists} playlist(s); ${summary.ratingsApplied} rating(s) applied.`
-			};
-		} catch (cause) {
-			notice = { tone: 'error', text: importErrorMessage(cause) };
-		}
+		notice = await applyLibraryFile(file);
 	}
 
 	/** @returns {void} */
@@ -106,11 +109,13 @@
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end" class="w-56">
-					<DropdownMenu.Item onSelect={onreimport}>
-						<RefreshCw class="size-4" />
-						Re-import / refresh
-					</DropdownMenu.Item>
-					<DropdownMenu.Separator />
+					{#if onYouTube}
+						<DropdownMenu.Item onSelect={onreimport}>
+							<RefreshCw class="size-4" />
+							Re-import / refresh
+						</DropdownMenu.Item>
+						<DropdownMenu.Separator />
+					{/if}
 					<DropdownMenu.Item onSelect={exportJson}>
 						<Download class="size-4" />
 						Export JSON
@@ -149,7 +154,7 @@
 			</div>
 		</dl>
 
-		{#if url}
+		{#if onYouTube}
 			<Button href={url} target="_blank" rel="noreferrer" variant="outline" class="w-full">
 				<ExternalLink class="size-4" />
 				Open in YouTube
@@ -179,14 +184,7 @@
 		{/if}
 
 		{#if notice}
-			<p
-				class="rounded-lg border p-3 text-xs {notice.tone === 'error'
-					? 'border-destructive/40 bg-destructive/10 text-destructive'
-					: 'text-muted-foreground bg-muted/50'}"
-				role="status"
-			>
-				{notice.text}
-			</p>
+			<Notice tone={notice.tone} icon={false}>{notice.text}</Notice>
 		{/if}
 	</Card.Content>
 </Card.Root>

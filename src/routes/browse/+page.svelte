@@ -18,6 +18,7 @@
 	import {
 		DEFAULT_SORT,
 		PAGE_SIZE,
+		createFilter,
 		filterVideos,
 		sortVideos
 	} from '$lib/components/browse/filters.js';
@@ -26,27 +27,20 @@
 	let importOpen = $state(false);
 	let importInput = $state('');
 
-	/** @type {import('$lib/types.js').Rating[]} */
-	let tiers = $state([]);
-	let unrated = $state(false);
-	let search = $state('');
-	let hideUnavailable = $state(true);
+	/** @type {import('$lib/components/browse/filters.js').BrowseFilter} */
+	let filter = $state(createFilter());
 	/** @type {import('$lib/components/browse/filters.js').SortKey} */
 	let sort = $state(DEFAULT_SORT);
 	let visibleCount = $state(PAGE_SIZE);
 
 	const playlist = $derived(library.activePlaylist);
 	const videos = $derived(library.activeVideos);
-	const matches = $derived(
-		sortVideos(filterVideos(videos, { tiers, unrated, search, hideUnavailable }), sort)
-	);
+	const matches = $derived(sortVideos(filterVideos(videos, filter), sort));
 	const visible = $derived(matches.slice(0, visibleCount));
 	const hasMore = $derived(matches.length > visible.length);
 
 	/** Identity of everything that narrows the list — rating a video is not part of it. */
-	const filterKey = $derived(
-		JSON.stringify([playlist?.id ?? null, tiers, unrated, search, hideUnavailable, sort])
-	);
+	const filterKey = $derived(JSON.stringify([playlist?.id ?? null, filter, sort]));
 
 	$effect(() => {
 		// A different filter shows a different set, so the paging starts over.
@@ -57,15 +51,6 @@
 	});
 
 	/**
-	 * @param {string} videoId
-	 * @param {import('$lib/types.js').Rating | null} rating
-	 * @returns {void}
-	 */
-	function rate(videoId, rating) {
-		library.rate(videoId, rating);
-	}
-
-	/**
 	 * @param {string} [prefill] - Playlist id to refresh; empty for a fresh import.
 	 * @returns {void}
 	 */
@@ -74,7 +59,10 @@
 		importOpen = true;
 	}
 
-	/** @returns {void} */
+	/**
+	 * Shuffle and reset only show in the playlist order, so both switch back to it.
+	 * @returns {void}
+	 */
 	function shuffle() {
 		sort = DEFAULT_SORT;
 		library.shuffle();
@@ -105,15 +93,7 @@
 				/>
 
 				<div class="grid gap-3">
-					<Toolbar
-						bind:tiers
-						bind:unrated
-						bind:search
-						bind:hideUnavailable
-						bind:sort
-						onshuffle={shuffle}
-						onresetorder={resetOrder}
-					/>
+					<Toolbar bind:filter bind:sort onshuffle={shuffle} onresetorder={resetOrder} />
 
 					<p class="text-muted-foreground text-xs" aria-live="polite">
 						Showing {visible.length} of {matches.length}
@@ -131,7 +111,7 @@
 				{:else}
 					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
 						{#each visible as video (video.id)}
-							<VideoCard {video} onrate={(rating) => rate(video.id, rating)} />
+							<VideoCard {video} onrate={(rating) => library.rate(video.id, rating)} />
 						{/each}
 					</div>
 				{/if}

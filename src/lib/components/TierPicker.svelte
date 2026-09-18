@@ -17,36 +17,17 @@
 	 * @property {(rating: import('$lib/types.js').Rating | null) => void} [onchange] - Receives the new tier, or `null` when it was cleared.
 	 * @property {'sm' | 'md' | 'lg'} [size]
 	 * @property {string} [label] - Accessible name of the group.
-	 * @property {boolean} [disabled]
 	 * @property {string} [class]
 	 */
 
 	/** @type {Props} */
-	let {
-		value,
-		onchange,
-		size = 'md',
-		label = 'Rate this video',
-		disabled,
-		class: className
-	} = $props();
+	let { value, onchange, size = 'md', label = 'Rate this video', class: className } = $props();
 
 	const sizeClasses = {
 		sm: 'size-7 text-xs',
 		md: 'size-8 text-sm',
 		lg: 'size-10 text-base'
 	};
-
-	/**
-	 * Clicking the active tier again clears the rating, which is the fastest way to
-	 * undo a mis-click without hunting for the clear button.
-	 *
-	 * @param {import('$lib/types.js').Rating} rating
-	 * @returns {void}
-	 */
-	function pick(rating) {
-		onchange?.(value === rating ? null : rating);
-	}
 </script>
 
 <div role="group" aria-label={label} class={cn('flex flex-wrap items-center gap-1', className)}>
@@ -54,14 +35,12 @@
 		{@const selected = value === tier.rating}
 		<button
 			type="button"
-			{disabled}
 			aria-pressed={selected}
 			title={tier.label}
-			onclick={() => pick(tier.rating)}
+			onclick={() => onchange?.(tier.rating)}
 			class={cn(
 				'inline-flex shrink-0 items-center justify-center rounded-md border font-bold transition-colors',
 				'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
-				'disabled:pointer-events-none disabled:opacity-50',
 				sizeClasses[size],
 				selected
 					? cn(tier.solid, 'border-transparent')
@@ -73,16 +52,18 @@
 		</button>
 	{/each}
 
+	<!--
+		Clearing is its own button rather than a second tap on the active tier: on a
+		touch screen that shortcut turns a mis-tap into silent data loss.
+	-->
 	{#if value}
 		<button
 			type="button"
-			{disabled}
 			title="Clear rating"
 			onclick={() => onchange?.(null)}
 			class={cn(
 				'text-muted-foreground hover:text-foreground hover:bg-muted inline-flex shrink-0 items-center justify-center rounded-md border border-dashed transition-colors',
 				'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
-				'disabled:pointer-events-none disabled:opacity-50',
 				sizeClasses[size]
 			)}
 		>

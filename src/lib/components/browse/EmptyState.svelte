@@ -2,7 +2,7 @@
 	/**
 	 * What the Browse page shows before anything has been imported: what the app
 	 * does, what it needs, and the two ways in (fetch from YouTube, or restore a
-	 * previous export).
+	 * previous export — the playlist card's "Import JSON" is out of reach here).
 	 */
 	import ListVideo from '@lucide/svelte/icons/list-video';
 	import Upload from '@lucide/svelte/icons/upload';
@@ -11,8 +11,8 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import TierBadge from '$lib/components/TierBadge.svelte';
 	import { TIERS } from '$lib/tiers.js';
-	import { library } from '$lib/state/library.svelte.js';
-	import { importErrorMessage } from './errors.js';
+	import { applyLibraryFile, takeFile } from './json-file.js';
+	import Notice from './Notice.svelte';
 
 	/**
 	 * @typedef {Object} Props
@@ -24,25 +24,17 @@
 
 	/** @type {HTMLInputElement | null} */
 	let fileInput = $state(null);
-	/** @type {string} */
-	let error = $state('');
+	/** @type {import('./json-file.js').Notice | null} */
+	let notice = $state(null);
 
 	/**
 	 * @param {Event} event
 	 * @returns {Promise<void>}
 	 */
 	async function restore(event) {
-		const target = /** @type {HTMLInputElement} */ (event.currentTarget);
-		const file = target.files?.[0];
-		target.value = '';
+		const file = takeFile(event);
 		if (!file) return;
-
-		error = '';
-		try {
-			library.importJson(await file.text());
-		} catch (cause) {
-			error = importErrorMessage(cause);
-		}
+		notice = await applyLibraryFile(file);
 	}
 </script>
 
@@ -73,13 +65,8 @@
 				one. Already have an export from an earlier session? Restore it instead.
 			</p>
 
-			{#if error}
-				<p
-					class="border-destructive/40 bg-destructive/10 text-destructive rounded-lg border p-3 text-xs"
-					role="alert"
-				>
-					{error}
-				</p>
+			{#if notice}
+				<Notice tone={notice.tone}>{notice.text}</Notice>
 			{/if}
 		</Card.Content>
 

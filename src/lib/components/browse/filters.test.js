@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	createFilter,
 	DEFAULT_SORT,
 	filterVideos,
 	matchesSearch,
@@ -175,6 +176,28 @@ describe('sortVideos', () => {
 
 	it('falls back to the playlist order for an unknown key', () => {
 		expect(sortVideos(videos, 'nonsense').map((v) => v.id)).toEqual(['1', '2', '3', '4']);
+	});
+});
+
+describe('createFilter', () => {
+	it('starts with nothing selected and unavailable videos hidden', () => {
+		expect(createFilter()).toEqual({
+			tiers: [],
+			unrated: false,
+			search: '',
+			hideUnavailable: true
+		});
+	});
+
+	it('shows every playable video', () => {
+		const videos = [video('a', { rating: 'S' }), video('b'), video('c', { unavailable: true })];
+		expect(filterVideos(videos, createFilter()).map((v) => v.id)).toEqual(['a', 'b']);
+	});
+
+	it('hands out a fresh object each time', () => {
+		const first = createFilter();
+		first.tiers.push('S');
+		expect(createFilter().tiers).toEqual([]);
 	});
 });
 
