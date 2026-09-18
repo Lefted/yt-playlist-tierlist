@@ -6,9 +6,13 @@
 	 * Stateless by design — it renders `value` and reports every change through
 	 * `onchange`, so the caller decides what "rating" means (write to the library,
 	 * advance a session, …).
+	 *
+	 * Sibling control: `components/rate/TierBar.svelte`, the thumb-sized version the
+	 * Rate page sticks to the bottom of the viewport. Both take their colours,
+	 * labels and order from `$lib/tiers.js` and share `TIER_BUTTON_BASE`.
 	 */
 	import { cn } from '$lib/utils.js';
-	import { TIERS } from '$lib/tiers.js';
+	import { TIERS, TIER_BUTTON_BASE } from '$lib/tiers.js';
 	import X from '@lucide/svelte/icons/x';
 
 	/**
@@ -39,8 +43,8 @@
 			title={tier.label}
 			onclick={() => onchange?.(tier.rating)}
 			class={cn(
-				'inline-flex shrink-0 items-center justify-center rounded-md border font-bold transition-colors',
-				'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
+				TIER_BUTTON_BASE,
+				'shrink-0 rounded-md border',
 				sizeClasses[size],
 				selected
 					? cn(tier.solid, 'border-transparent')
@@ -62,8 +66,8 @@
 			title="Clear rating"
 			onclick={() => onchange?.(null)}
 			class={cn(
-				'text-muted-foreground hover:text-foreground hover:bg-muted inline-flex shrink-0 items-center justify-center rounded-md border border-dashed transition-colors',
-				'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
+				TIER_BUTTON_BASE,
+				'text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 rounded-md border border-dashed',
 				sizeClasses[size]
 			)}
 		>

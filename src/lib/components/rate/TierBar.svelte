@@ -4,8 +4,12 @@
 	 *
 	 * Sized for thumbs: every button clears the 48 px touch target, and the row is
 	 * the element the Rate page sticks to the bottom of the viewport on mobile.
+	 *
+	 * Sibling control: `components/TierPicker.svelte`, the compact inline version a
+	 * Browse card carries. Both take their colours, labels, keys and order from
+	 * `$lib/tiers.js` and share `TIER_BUTTON_BASE`.
 	 */
-	import { TIERS } from '$lib/tiers.js';
+	import { TIERS, TIER_BUTTON_BASE } from '$lib/tiers.js';
 	import { cn } from '$lib/utils.js';
 
 	/**
@@ -49,9 +53,8 @@
 			title="{tier.label} ({tier.key.toUpperCase()})"
 			onclick={() => onrate(tier.rating)}
 			class={cn(
-				'flex min-h-14 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg',
-				'text-xl leading-none font-bold transition select-none sm:min-h-12',
-				'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
+				TIER_BUTTON_BASE,
+				'min-h-14 flex-col gap-0.5 rounded-lg text-xl leading-none sm:min-h-12',
 				tier.solid,
 				rating === tier.rating && cn('ring-offset-background ring-2 ring-offset-2', tier.ring),
 				highlight && 'animate-pulse'

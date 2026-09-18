@@ -63,6 +63,22 @@ export const TIER_BY_RATING = Object.fromEntries(TIERS.map((tier) => [tier.ratin
 export const RATING_BY_KEY = Object.fromEntries(TIERS.map((tier) => [tier.key, tier.rating]));
 
 /**
+ * What every tier button looks like regardless of where it sits: a centred, bold
+ * glyph with one focus ring for the whole app.
+ *
+ * The two tier controls (the compact picker on a Browse card and the thumb-sized
+ * bar on the Rate page) stay separate components — they have different jobs — but
+ * this keeps their shared chrome from drifting apart. Layout, size and radius are
+ * each control's own business; `cn()` lets them override anything here.
+ *
+ * @type {string}
+ */
+export const TIER_BUTTON_BASE =
+	'flex cursor-pointer items-center justify-center font-bold transition select-none ' +
+	'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 ' +
+	'focus-visible:ring-offset-2 focus-visible:outline-none';
+
+/**
  * @param {import('$lib/types.js').Rating | null | undefined} rating
  * @returns {TierDefinition | null}
  */
