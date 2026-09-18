@@ -6,7 +6,7 @@
 	 * we are in it belongs to `session`, and every rating goes straight into
 	 * `library`, which persists it.
 	 */
-	import { replaceState } from '$app/navigation';
+	import { afterNavigate, replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
@@ -53,6 +53,16 @@
 	if (initial.videoId && !session.jumpTo(initial.videoId)) {
 		toast.warning('That video is not in the active playlist.');
 	}
+
+	/**
+	 * `?v=` is a starting point, consumed above. Drop it once the router is up, so a
+	 * reload continues the session instead of jumping back to that video.
+	 */
+	afterNavigate(() => {
+		if (!page.url.searchParams.has('v')) return;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		replaceState(`${resolve('/rate')}${rateQuery(session.filter)}`, page.state);
+	});
 
 	/** @type {boolean} Whether the filter has changed since the page was opened. */
 	let filterTouched = false;
