@@ -1,4 +1,8 @@
 <script>
+	/**
+	 * The tier of a video, as a small non-interactive badge. Colours and labels come
+	 * from `$lib/tiers.js`, the same source the two tier controls read.
+	 */
 	import { cn } from '$lib/utils.js';
 	import { tierFor } from '$lib/tiers.js';
 
@@ -6,12 +10,11 @@
 	 * @typedef {Object} Props
 	 * @property {import('$lib/types.js').Rating | null | undefined} rating - null renders an "unrated" badge.
 	 * @property {'sm' | 'md' | 'lg'} [size]
-	 * @property {'solid' | 'soft'} [variant]
 	 * @property {string} [class]
 	 */
 
 	/** @type {Props} */
-	let { rating, size = 'md', variant = 'solid', class: className } = $props();
+	let { rating, size = 'md', class: className } = $props();
 
 	const tier = $derived(tierFor(rating));
 
@@ -27,9 +30,7 @@
 		'inline-flex items-center justify-center rounded-md border leading-none font-bold tabular-nums select-none',
 		sizeClasses[size],
 		tier
-			? variant === 'solid'
-				? cn(tier.solid, 'border-transparent')
-				: tier.soft
+			? cn(tier.solid, 'border-transparent')
 			: 'border-muted-foreground/40 text-muted-foreground border-dashed',
 		className
 	)}

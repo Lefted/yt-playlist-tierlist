@@ -33,7 +33,6 @@ describe('defaults', () => {
 			autoAdvance: true,
 			fullscreenOnPlay: false
 		});
-		expect(settings.hasApiKey).toBe(false);
 	});
 });
 
@@ -69,7 +68,6 @@ describe('persistence', () => {
 			autoAdvance: false,
 			fullscreenOnPlay: true
 		});
-		expect(settings.hasApiKey).toBe(true);
 	});
 
 	it('falls back to the defaults for corrupted storage', async () => {
@@ -97,22 +95,5 @@ describe('coercion', () => {
 		const { settings } = await boot();
 		settings.autoAdvance = /** @type {any} */ (0);
 		expect(settings.autoAdvance).toBe(false);
-	});
-});
-
-describe('reset', () => {
-	it('restores and persists the defaults', async () => {
-		const { settings } = await boot();
-		settings.apiKey = 'AIza-test';
-		settings.fullscreenOnPlay = true;
-		settings.reset();
-
-		expect(settings.toJSON()).toEqual({
-			apiKey: '',
-			skipRated: true,
-			autoAdvance: true,
-			fullscreenOnPlay: false
-		});
-		expect(JSON.parse(/** @type {string} */ (store.entries.get(KEY))).apiKey).toBe('');
 	});
 });

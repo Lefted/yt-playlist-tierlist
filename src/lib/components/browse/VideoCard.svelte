@@ -29,7 +29,11 @@
 	const rateHref = $derived(`${resolve('/rate')}?v=${encodeURIComponent(video.id)}`);
 </script>
 
-<!-- `data-video-id` is the DOM hook the browser smoke tests address cards by. -->
+<!--
+	`data-video-id` is unread by the app. It is the stable hook a manual or scripted
+	browser pass addresses a specific card by; the class names are Tailwind and
+	change with every restyle.
+-->
 <article
 	class="bg-card text-card-foreground flex flex-col overflow-hidden rounded-xl border shadow-sm"
 	class:opacity-60={video.unavailable}

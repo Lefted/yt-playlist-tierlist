@@ -56,8 +56,8 @@ export const TIERS = RATING_ORDER.map((rating) => ({
 	...COLOURS[rating]
 }));
 
-/** @type {Record<string, TierDefinition>} */
-export const TIER_BY_RATING = Object.fromEntries(TIERS.map((tier) => [tier.rating, tier]));
+/** @type {Record<string, TierDefinition>} Lookup behind {@link tierFor}. */
+const TIER_BY_RATING = Object.fromEntries(TIERS.map((tier) => [tier.rating, tier]));
 
 /** @type {Record<string, import('$lib/types.js').Rating>} lower-case key → rating */
 export const RATING_BY_KEY = Object.fromEntries(TIERS.map((tier) => [tier.key, tier.rating]));

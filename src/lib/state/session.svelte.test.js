@@ -94,12 +94,12 @@ describe('queue', () => {
 		expect(queueIds()).toEqual(['v2', 'v5']);
 	});
 
-	it('exposes and toggles the filter', () => {
-		session.toggleTier('S');
+	it('exposes and replaces the filter', () => {
+		session.setFilter({ tiers: ['S'] });
 		expect([...session.filter.tiers]).toEqual(['S']);
-		session.toggleTier('F');
+		session.setFilter({ tiers: ['F', 'S'] });
 		expect([...session.filter.tiers]).toEqual(['S', 'F']);
-		session.toggleTier('S');
+		session.setFilter({ tiers: ['F', 'nope'] });
 		expect([...session.filter.tiers]).toEqual(['F']);
 
 		session.includeUnrated = false;

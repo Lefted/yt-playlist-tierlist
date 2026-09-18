@@ -76,20 +76,6 @@ class SettingsStore {
 		this.#persist();
 	}
 
-	/** @returns {boolean} Whether an API key is available for imports. */
-	get hasApiKey() {
-		return this.#apiKey !== '';
-	}
-
-	/**
-	 * Restore the defaults and persist them.
-	 * @returns {void}
-	 */
-	reset() {
-		this.#apply(DEFAULTS);
-		this.#persist();
-	}
-
 	/**
 	 * Plain snapshot, e.g. for tests or exports.
 	 * @returns {Settings}
