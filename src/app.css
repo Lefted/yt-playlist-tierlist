@@ -96,6 +96,33 @@
 	--radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * `src/lib/components/Player.svelte` puts its own wrapper into fullscreen, not the
+ * YouTube iframe: only an element of our document keeps the keyboard, which is what
+ * lets the rating shortcuts and the fullscreen overlay work at all.
+ *
+ * While it is up, the wrapper is the screen — so the card look and the 16:9 box,
+ * which are about the wrapper sitting in a page, have to stand down. The WebKit
+ * pseudo-class needs its own rule: one unknown selector would drop the whole list.
+ */
+.player-surface:fullscreen {
+	aspect-ratio: auto;
+	height: 100%;
+	width: 100%;
+	border: 0;
+	border-radius: 0;
+	background: #000;
+}
+
+.player-surface:-webkit-full-screen {
+	aspect-ratio: auto;
+	height: 100%;
+	width: 100%;
+	border: 0;
+	border-radius: 0;
+	background: #000;
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;

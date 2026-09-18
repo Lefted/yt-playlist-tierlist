@@ -8,6 +8,12 @@
 	 * on mobile, the user's autoplay gesture).
 	 */
 	import Film from '@lucide/svelte/icons/film';
+	import {
+		enterFullscreen,
+		FULLSCREEN_EVENTS,
+		isFullscreenElement,
+		leaveFullscreen
+	} from '$lib/fullscreen.js';
 	import { errorReasonFor, loadIframeApi, PLAYER_STATE } from '$lib/youtube/iframe-api.js';
 	import { cn } from '$lib/utils.js';
 
@@ -21,6 +27,11 @@
 	 * @property {(reason: import('$lib/youtube/iframe-api.js').PlayerErrorReason) => void} [onerror]
 	 * @property {(state: number) => void} [onstatechange] - See `PLAYER_STATE`.
 	 * @property {() => void} [onready] - The player is up and accepts commands.
+	 * @property {boolean} [fullscreen] - Bindable, read-only in practice: whether the
+	 *   wrapper is the browser's fullscreen element. Set it through
+	 *   {@link requestFullscreen}, not by assignment.
+	 * @property {import('svelte').Snippet} [children] - Rendered over the video, inside
+	 *   the element that goes fullscreen — that is what an overlay has to be part of.
 	 * @property {string} [class]
 	 */
 
@@ -32,11 +43,19 @@
 		onerror,
 		onstatechange,
 		onready,
+		fullscreen = $bindable(false),
+		children,
 		class: className
 	} = $props();
 
 	/** @type {HTMLDivElement|undefined} The box the API's iframe is mounted into. */
 	let host = $state();
+
+	/**
+	 * @type {HTMLDivElement|undefined} The wrapper: what goes fullscreen, and what
+	 * {@link focus} hands the keyboard back to.
+	 */
+	let surface = $state();
 
 	/** @type {boolean} The player exists and accepts commands. */
 	let ready = $state(false);
@@ -129,6 +148,29 @@
 		};
 	});
 
+	/**
+	 * Keep {@link fullscreen} in step with the browser, whoever changed it — our own
+	 * button, `Escape`, or the window manager.
+	 *
+	 * Only *our* wrapper counts. When the user takes YouTube's own fullscreen button
+	 * instead, the fullscreen element is the cross-origin iframe: the overlay would
+	 * not be on screen and the keys would not reach us, so that is not our fullscreen.
+	 */
+	$effect(() => {
+		const node = surface;
+		if (!node) return;
+
+		const sync = () => {
+			fullscreen = isFullscreenElement(document, node);
+		};
+
+		sync();
+		for (const event of FULLSCREEN_EVENTS) document.addEventListener(event, sync);
+		return () => {
+			for (const event of FULLSCREEN_EVENTS) document.removeEventListener(event, sync);
+		};
+	});
+
 	/** Feed a new video into the existing player. */
 	$effect(() => {
 		const id = videoId;
@@ -191,7 +233,25 @@
 	}
 
 	/**
-	 * Put the player's iframe into fullscreen.
+	 * Pull the keyboard out of the iframe and back into our document.
+	 *
+	 * Everything the iframe swallows — the rating keys, undo, the tier bar — is on
+	 * our side of the origin boundary, so whoever puts focus into the player (a
+	 * click, `loadVideoById`, entering fullscreen) has to hand it back.
+	 *
+	 * @returns {void}
+	 */
+	export function focus() {
+		surface?.focus({ preventScroll: true });
+	}
+
+	/**
+	 * Put the player into fullscreen — the wrapper, not the iframe.
+	 *
+	 * Fullscreening the iframe would make a cross-origin document the fullscreen
+	 * element, and every key would go to YouTube instead of to us (issue #9). The
+	 * wrapper is ours, so the overlay stays on screen and the shortcuts keep working;
+	 * focus is pulled back out of the iframe right away.
 	 *
 	 * Awaits the browser's answer instead of only the call, because a refusal
 	 * usually arrives as a rejected promise: iOS Safari allows fullscreen on a
@@ -202,24 +262,32 @@
 	 *   say "not available here".
 	 */
 	export async function requestFullscreen() {
-		const frame = /** @type {any} */ (player?.getIframe() ?? null);
-		if (!frame) return false;
+		if (!(await enterFullscreen(surface))) return false;
+		focus();
+		return true;
+	}
 
-		const request = frame.requestFullscreen ?? frame.webkitRequestFullscreen;
-		if (typeof request !== 'function') return false;
-
-		try {
-			await request.call(frame);
-			return true;
-		} catch {
-			return false;
-		}
+	/**
+	 * Leave fullscreen again, if this player is what is in it.
+	 * @returns {Promise<boolean>} Whether there was anything to leave.
+	 */
+	export async function exitFullscreen() {
+		if (!fullscreen) return false;
+		return await leaveFullscreen(document);
 	}
 </script>
 
+<!--
+	`tabindex="-1"` is not decoration: it makes the wrapper focusable, which is what
+	{@link focus} needs to take the keyboard back from the iframe. `.player-surface`
+	is styled in `app.css` for the fullscreen case — see the comment there.
+-->
 <div
+	bind:this={surface}
+	tabindex="-1"
 	class={cn(
-		'bg-muted relative aspect-video w-full overflow-hidden rounded-xl border',
+		'player-surface bg-muted relative aspect-video w-full overflow-hidden rounded-xl border',
+		'focus-visible:outline-none',
 		'[&_iframe]:absolute [&_iframe]:inset-0 [&_iframe]:h-full [&_iframe]:w-full [&_iframe]:border-0',
 		className
 	)}
@@ -235,4 +303,6 @@
 			<span class="sr-only">{videoId ? 'Loading the player…' : 'No video selected'}</span>
 		</div>
 	{/if}
+
+	{@render children?.()}
 </div>

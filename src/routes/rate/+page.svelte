@@ -15,12 +15,14 @@
 	import EmptyLibrary from '$lib/components/rate/EmptyLibrary.svelte';
 	import NowPlaying from '$lib/components/rate/NowPlaying.svelte';
 	import PlaybackControls from '$lib/components/rate/PlaybackControls.svelte';
+	import PlayerOverlay from '$lib/components/rate/PlayerOverlay.svelte';
 	import SessionSummary from '$lib/components/rate/SessionSummary.svelte';
 	import SessionToolbar from '$lib/components/rate/SessionToolbar.svelte';
 	import TierBar from '$lib/components/rate/TierBar.svelte';
 	import { parseRateParams, rateQuery } from '$lib/components/rate/params.js';
 	import { shortcutFor, shortcutsEnabled } from '$lib/components/rate/shortcuts.js';
 	import { describeUndo } from '$lib/components/rate/undo.js';
+	import { focusTargetFor } from '$lib/fullscreen.js';
 	import { library } from '$lib/state/library.svelte.js';
 	import { session } from '$lib/state/session.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
@@ -39,6 +41,18 @@
 	let awaitingRating = $state(false);
 
 	let helpOpen = $state(false);
+
+	/** @type {boolean} The player's own wrapper is the browser's fullscreen element. */
+	let fullscreen = $state(false);
+
+	/** @type {boolean} Whether the fullscreen overlay is currently shown. */
+	let overlayVisible = $state(true);
+
+	/** @type {ReturnType<typeof setTimeout>|undefined} */
+	let overlayTimer;
+
+	/** How long the fullscreen overlay stays up after the last sign of life. */
+	const OVERLAY_IDLE_MS = 2200;
 
 	/** @type {string|null} Video the fullscreen request was already made for. */
 	let fullscreenFor = null;
@@ -93,6 +107,58 @@
 		void current?.id;
 		awaitingRating = false;
 	});
+
+	/**
+	 * Entering fullscreen shows the overlay and starts its idle countdown; leaving
+	 * puts it back to "shown", so the next fullscreen does not start faded out.
+	 */
+	$effect(() => {
+		if (fullscreen) keepOverlayUp();
+		else {
+			clearTimeout(overlayTimer);
+			overlayVisible = true;
+		}
+	});
+
+	$effect(() => () => clearTimeout(overlayTimer));
+
+	/**
+	 * Show the fullscreen overlay and restart the countdown that hides it again.
+	 * @returns {void}
+	 */
+	function keepOverlayUp() {
+		overlayVisible = true;
+		clearTimeout(overlayTimer);
+		overlayTimer = setTimeout(() => {
+			overlayVisible = false;
+		}, OVERLAY_IDLE_MS);
+	}
+
+	/**
+	 * Take the keyboard back from the iframe.
+	 *
+	 * Only while fullscreen: outside it, the page keeps its own focus (a filter
+	 * popover, the tier bar) and stealing it would be wrong.
+	 *
+	 * @returns {void}
+	 */
+	function recoverFocus() {
+		if (fullscreen) player?.focus();
+	}
+
+	/**
+	 * Run something the fullscreen overlay asked for: keep the controls up and hand
+	 * the keyboard back, so the next keystroke is a shortcut again and not something
+	 * the button that was just clicked answers.
+	 *
+	 * @param {() => void} action
+	 * @returns {void}
+	 */
+	function overlayAction(action) {
+		action();
+		keepOverlayUp();
+		recoverFocus();
+	}
 
 	/**
 	 * @param {import('$lib/types.js').Rating} rating
@@ -156,6 +222,7 @@
 	/** @returns {void} */
 	function handleEnded() {
 		if (!current || !settings.autoAdvance) return;
+		if (fullscreen) keepOverlayUp();
 
 		// An unrated video is the whole point of the session — wait for the verdict
 		// instead of moving on.
@@ -164,7 +231,10 @@
 			return;
 		}
 		awaitingRating = true;
-		tierBar?.focus();
+		// In fullscreen the tier bar is off screen; the overlay's buttons are the ones
+		// on it, and the keyboard belongs to the wrapper.
+		if (focusTargetFor(fullscreen) === 'player') player?.focus();
+		else tierBar?.focus();
 	}
 
 	/**
@@ -173,6 +243,11 @@
 	 */
 	function handleStateChange(state) {
 		playerState = state;
+
+		// Every video change runs through the iframe, which takes the focus with it;
+		// while fullscreen that would leave us without a keyboard (issue #9).
+		if (state === PLAYER_STATE.PLAYING) recoverFocus();
+
 		if (state !== PLAYER_STATE.PLAYING || !settings.fullscreenOnPlay) return;
 		if (!current || fullscreenFor === current.id) return;
 
@@ -213,6 +288,7 @@
 		// close the very list it opened.
 		if (!shortcutsEnabled(event, document) && !(action.type === 'help' && helpOpen)) return;
 		event.preventDefault();
+		if (fullscreen) keepOverlayUp();
 
 		switch (action.type) {
 			case 'rate':
@@ -266,11 +342,31 @@
 			<div class="mx-auto w-full landscape:max-w-[calc((100svh-13rem)*16/9)]">
 				<Player
 					bind:this={player}
+					bind:fullscreen
 					videoId={current.id}
 					onended={handleEnded}
 					onerror={handlePlayerError}
 					onstatechange={handleStateChange}
-				/>
+				>
+					{#if fullscreen}
+						<PlayerOverlay
+							rating={current.rating}
+							title={current.title}
+							visible={overlayVisible}
+							{awaitingRating}
+							canPrevious={session.hasPrevious}
+							canNext={session.hasNext}
+							canUndo={session.canUndo}
+							{undoLabel}
+							onrate={(rating) => overlayAction(() => rate(rating))}
+							onprevious={() => overlayAction(() => session.previous())}
+							onnext={() => overlayAction(() => session.next())}
+							onundo={() => overlayAction(undo)}
+							onexit={() => player?.exitFullscreen()}
+							onactivity={keepOverlayUp}
+						/>
+					{/if}
+				</Player>
 			</div>
 
 			<NowPlaying
