@@ -34,13 +34,6 @@ export default [
 		}
 	},
 	{
-		ignores: [
-			'build/',
-			'.svelte-kit/',
-			'dist/',
-			'node_modules/',
-			// Legacy vanilla-JS prototype kept as the reference for the import/rating rewrite.
-			'index.js'
-		]
+		ignores: ['build/', '.svelte-kit/', 'dist/', 'node_modules/']
 	}
 ];

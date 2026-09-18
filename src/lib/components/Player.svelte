@@ -1,9 +1,10 @@
 <script>
-	import { currentVideo, isShowDummyVideo } from '$lib/state/Playlist.svelte.js';
+	import { session } from '$lib/state/session.svelte.js';
 
 	// Plain embed for now. The rating ticket replaces this with the YouTube iframe API
 	// (player events, autoplay, fullscreen), which needs its script loaded explicitly.
-	const embedUrl = $derived(`https://www.youtube.com/embed/${currentVideo.id}?enablejsapi=1`);
+	const video = $derived(session.currentVideo);
+	const embedUrl = $derived(`https://www.youtube.com/embed/${video?.id ?? ''}?enablejsapi=1`);
 </script>
 
 {#snippet dummy()}
@@ -26,14 +27,14 @@
 
 <div class="relative h-0 w-full pb-[56.25%]">
 	<div class="absolute top-0 left-0 h-full w-full">
-		{#if isShowDummyVideo()}
+		{#if !video}
 			{@render dummy()}
 		{:else}
 			<iframe
 				id="iframe-player"
 				class="h-full w-full border-0"
 				src={embedUrl}
-				title={currentVideo.title ?? 'YouTube video player'}
+				title={video.title || 'YouTube video player'}
 				allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
 				allowfullscreen
 			></iframe>

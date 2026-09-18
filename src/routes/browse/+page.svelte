@@ -10,9 +10,9 @@
 	import { Separator } from '$lib/components/ui/separator/index.js';
 
 	import Player from '$lib/components/Player.svelte';
+	import { RATING_ORDER } from '$lib/types.js';
 
-	// Placeholder tier labels; the rating ticket replaces them with RATING_ORDER.
-	const tiers = ['S', 'A', 'B', 'C', 'D', 'F'];
+	const tiers = RATING_ORDER;
 </script>
 
 <main class="grid flex-1 items-start gap-4 p-4 sm:px-6 md:gap-8 lg:grid-cols-3 xl:grid-cols-3">

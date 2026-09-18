@@ -39,8 +39,16 @@ npx shadcn-svelte@latest add <component>
 Components are written to `src/lib/components/ui/` and are meant to be edited in
 place; the configuration lives in `components.json`.
 
-## Legacy prototype
+## Domain and state
 
-`index.html`, `index.js` and `start-server.sh` in the repository root are the
-original vanilla-JS prototype. They are kept as a reference for porting the
-playlist import and rating logic and are excluded from lint/format.
+- `src/lib/types.js` — the domain model (`Rating`, `Video`, `Playlist`, `Settings`) as
+  JSDoc typedefs, plus `RATING_ORDER` and `isBetterOrEqual`.
+- `src/lib/storage.js` — the only place that touches `localStorage`; every key is
+  namespaced `ytpt:v1:<name>`.
+- `src/lib/youtube/api.js` — pure YouTube Data API calls (`parsePlaylistInput`,
+  `fetchPlaylistMeta`, `fetchPlaylistVideos`) that fail with a typed `YouTubeApiError`.
+- `src/lib/state/*.svelte.js` — rune-based singletons: `settings`, `library`
+  (playlists, ratings, import/export) and `session` (the rating queue).
+
+The original vanilla-JS prototype (`index.html`, `index.js`, `start-server.sh`) was
+removed once its logic had been ported into these modules.
