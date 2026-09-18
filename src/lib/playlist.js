@@ -143,15 +143,22 @@ export function orderedVideos(playlist) {
 /**
  * Merge a freshly fetched or imported playlist into an existing one.
  *
- * Rules: local ratings win, videos that vanished from the source are kept but
- * flagged `unavailable`, new videos are appended, and the existing order survives.
+ * Rules: local ratings win, new videos are appended, and the existing order
+ * survives. What happens to a video `incoming` does not mention depends on
+ * whether `incoming` is allowed to speak for the whole playlist — see `complete`.
  *
  * @param {Playlist|null} existing
  * @param {Playlist} incoming
  * @param {string} now - ISO timestamp used for `updatedAt`.
+ * @param {{ complete?: boolean }} [options]
+ * @param {boolean} [options.complete] - Whether `incoming` lists every video the
+ *   playlist has. A YouTube (re-)fetch does (default `true`), so a video missing
+ *   from it is gone from YouTube and is kept but flagged `unavailable`. A restored
+ *   JSON backup does not — it may be older or partial — so it must leave videos it
+ *   never mentions exactly as they are.
  * @returns {Playlist}
  */
-export function mergePlaylist(existing, incoming, now) {
+export function mergePlaylist(existing, incoming, now, { complete = true } = {}) {
 	if (!existing) {
 		return {
 			...incoming,
@@ -173,8 +180,9 @@ export function mergePlaylist(existing, incoming, now) {
 		seen.add(old.id);
 		const fresh = incomingById.get(old.id);
 		if (!fresh) {
-			// Gone from the source: keep the rating, but it can no longer be played.
-			videos.push({ ...old, unavailable: true });
+			// Gone from a source that lists everything: keep the rating, but it can no
+			// longer be played. A partial source says nothing about it, so leave it be.
+			videos.push(complete ? { ...old, unavailable: true } : { ...old });
 			continue;
 		}
 		videos.push({

@@ -335,6 +335,25 @@ describe('exportJson / importJson', () => {
 		expect(library.activeVideos[0].rating).toBe('S');
 	});
 
+	it('does not retire videos a restored backup predates', async () => {
+		const { library } = await boot(
+			storedLibrary([
+				makePlaylist({
+					id: 'PL1',
+					videos: [makeVideo({ id: 'v1', rating: 'S' }), makeVideo({ id: 'v2', position: 1 })]
+				})
+			])
+		);
+
+		// An older export that only knew about v1.
+		library.importJson(
+			JSON.stringify({ version: 1, playlists: [{ id: 'PL1', videos: [{ id: 'v1' }] }] })
+		);
+
+		expect(library.activeVideos.map((video) => video.unavailable)).toEqual([false, false]);
+		expect(library.availableCount).toBe(2);
+	});
+
 	it('rejects invalid JSON and unknown shapes', async () => {
 		const { library } = await boot();
 

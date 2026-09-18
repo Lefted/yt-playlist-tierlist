@@ -293,7 +293,9 @@ class Library {
 			const before = this.playlists.find((playlist) => playlist.id === incoming.id) ?? null;
 			videos += incoming.videos.length;
 			ratingsApplied += countNewRatings(before, incoming);
-			this.#upsert(incoming, now);
+			// A backup is not authoritative about the playlist's contents: it may
+			// predate videos that were added since, and must not condemn them.
+			this.#upsert(incoming, now, { complete: false });
 		}
 
 		if (this.#activePlaylistId === null) this.#activePlaylistId = this.playlists[0]?.id ?? null;
@@ -303,6 +305,11 @@ class Library {
 
 	/**
 	 * Drop everything, in memory and in storage.
+	 *
+	 * No UI calls this — it is the reset seam for the suites that exercise the
+	 * singleton in place (`components/browse/json-file.test.js`) instead of booting a
+	 * fresh module. Removing it would mean each of them clearing playlist by playlist.
+	 *
 	 * @returns {void}
 	 */
 	clear() {
@@ -370,7 +377,10 @@ class Library {
 					videos: unmatched,
 					order: unmatched.map((video) => video.id)
 				},
-				now
+				now,
+				// Each legacy import contributes only the entries it could not match, so
+				// a second one says nothing about what a first one left here.
+				{ complete: false }
 			);
 			playlists += 1;
 			ratingsApplied += unmatched.filter((video) => video.rating !== null).length;
@@ -386,11 +396,18 @@ class Library {
 	 *
 	 * @param {Playlist} incoming
 	 * @param {string} now
+	 * @param {{ complete?: boolean }} [options] - See {@link mergePlaylist}. Only a
+	 *   YouTube fetch lists every video; a restored backup may be older or partial.
 	 * @returns {Playlist} The stored (merged) playlist.
 	 */
-	#upsert(incoming, now) {
+	#upsert(incoming, now, options) {
 		const index = this.playlists.findIndex((playlist) => playlist.id === incoming.id);
-		const merged = mergePlaylist(index === -1 ? null : this.playlists[index], incoming, now);
+		const merged = mergePlaylist(
+			index === -1 ? null : this.playlists[index],
+			incoming,
+			now,
+			options
+		);
 		if (index === -1) this.playlists.push(merged);
 		else this.playlists[index] = merged;
 		return /** @type {Playlist} */ (this.playlists.find((playlist) => playlist.id === incoming.id));

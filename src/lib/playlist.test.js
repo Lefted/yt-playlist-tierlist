@@ -155,6 +155,16 @@ describe('mergePlaylist', () => {
 		expect(merged.order).toEqual(['v1', 'v2', 'v3', 'v4']);
 	});
 
+	it('leaves videos a partial source omits alone', () => {
+		// A restored backup speaks only for what it contains: v3 is missing from it
+		// because the file is older, not because YouTube dropped the video.
+		const merged = mergePlaylist(existing(), incoming(), NOW, { complete: false });
+
+		expect(merged.videos.map((video) => video.id)).toEqual(['v1', 'v2', 'v3', 'v4']);
+		expect(merged.videos.map((video) => video.unavailable)).toEqual([false, true, false, false]);
+		expect(merged.videos.map((video) => video.rating)).toEqual(['S', null, null, null]);
+	});
+
 	it('never resurrects a video the player reported as broken', () => {
 		// v2 is unavailable locally but comes back as playable from the API.
 		const merged = mergePlaylist(existing(), incoming(), NOW);
