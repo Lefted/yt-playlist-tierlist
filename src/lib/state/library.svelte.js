@@ -202,6 +202,19 @@ class Library {
 	}
 
 	/**
+	 * Take the "unplayable" flag off a video of the active playlist again — the way
+	 * back from {@link markUnavailable}, used by the session's undo.
+	 *
+	 * @param {string} videoId
+	 * @returns {boolean} `false` when the active playlist has no such video.
+	 */
+	markAvailable(videoId) {
+		return this.#updateVideo(videoId, (video) => {
+			video.unavailable = false;
+		});
+	}
+
+	/**
 	 * Shuffle the playback order of the active playlist (Fisher-Yates). The order is
 	 * persisted, so it survives a reload.
 	 *

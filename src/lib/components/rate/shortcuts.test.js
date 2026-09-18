@@ -55,10 +55,23 @@ describe('shortcutFor', () => {
 		expect(shortcutFor(keydown('?'))).toEqual({ type: 'help' });
 	});
 
+	it('maps u, Backspace and ctrl/cmd+z to undo', () => {
+		expect(shortcutFor(keydown('u'))).toEqual({ type: 'undo' });
+		expect(shortcutFor(keydown('Backspace'))).toEqual({ type: 'undo' });
+		expect(shortcutFor(keydown('z', { ctrlKey: true }))).toEqual({ type: 'undo' });
+		expect(shortcutFor(keydown('Z', { metaKey: true }))).toEqual({ type: 'undo' });
+	});
+
+	it('leaves redo to the browser', () => {
+		expect(shortcutFor(keydown('z', { ctrlKey: true, shiftKey: true }))).toBeNull();
+		expect(shortcutFor(keydown('y', { ctrlKey: true }))).toBeNull();
+	});
+
 	it('ignores keys with ctrl, meta or alt', () => {
 		expect(shortcutFor(keydown('s', { ctrlKey: true }))).toBeNull();
 		expect(shortcutFor(keydown('s', { metaKey: true }))).toBeNull();
 		expect(shortcutFor(keydown('n', { altKey: true }))).toBeNull();
+		expect(shortcutFor(keydown('z', { ctrlKey: true, altKey: true }))).toBeNull();
 	});
 
 	it('ignores shift plus an unrelated key', () => {

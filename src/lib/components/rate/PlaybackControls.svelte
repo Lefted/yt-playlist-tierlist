@@ -12,6 +12,7 @@
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import SkipBack from '@lucide/svelte/icons/skip-back';
 	import SkipForward from '@lucide/svelte/icons/skip-forward';
+	import Undo2 from '@lucide/svelte/icons/undo-2';
 
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
@@ -28,6 +29,9 @@
 	 * @property {() => void} onreplay
 	 * @property {() => void} onplaypause
 	 * @property {() => void} onfullscreen
+	 * @property {boolean} [canUndo]
+	 * @property {string} [undoLabel] - What undoing would take back, for the tooltip.
+	 * @property {() => void} onundo
 	 * @property {string} [class]
 	 */
 
@@ -36,11 +40,14 @@
 		playing = false,
 		canPrevious = true,
 		canNext = true,
+		canUndo = false,
+		undoLabel = 'Undo',
 		onprevious,
 		onnext,
 		onreplay,
 		onplaypause,
 		onfullscreen,
+		onundo,
 		class: className
 	} = $props();
 
@@ -48,6 +55,7 @@
 	 * @typedef {Object} Control
 	 * @property {string} id - Stable across a label change (Play ↔ Pause).
 	 * @property {string} label
+	 * @property {string} [tooltip] - Defaults to the label; the undo button says what it would undo.
 	 * @property {string[]} keys - Display labels, see `SHORTCUT_KEYS`.
 	 * @property {any} icon - A `@lucide/svelte` icon component.
 	 * @property {() => void} onclick
@@ -92,6 +100,15 @@
 			icon: SkipForward,
 			onclick: onnext,
 			disabled: !canNext
+		},
+		{
+			id: 'undo',
+			label: 'Undo',
+			tooltip: undoLabel,
+			keys: SHORTCUT_KEYS.undo,
+			icon: Undo2,
+			onclick: onundo,
+			disabled: !canUndo
 		}
 	]);
 </script>
@@ -117,7 +134,7 @@
 					{/snippet}
 				</Tooltip.Trigger>
 				<Tooltip.Content>
-					{control.label}
+					{control.tooltip ?? control.label}
 					{#each control.keys as key (key)}
 						<kbd
 							data-slot="kbd"

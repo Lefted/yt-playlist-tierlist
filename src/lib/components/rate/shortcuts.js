@@ -13,7 +13,7 @@ import { RATING_BY_KEY, TIERS } from '$lib/tiers.js';
 /**
  * What the user asked for.
  * @typedef {{ type: 'rate', rating: Rating }
- *   | { type: 'next' | 'previous' | 'replay' | 'playPause' | 'fullscreen' | 'help' }} ShortcutAction
+ *   | { type: 'next' | 'previous' | 'replay' | 'playPause' | 'fullscreen' | 'undo' | 'help' }} ShortcutAction
  */
 
 /**
@@ -56,6 +56,7 @@ export const SHORTCUT_KEYS = {
 	replay: ['R', '0'],
 	playPause: ['Space'],
 	fullscreen: ['⇧', 'F'],
+	undo: ['U', '⌫', 'Ctrl+Z'],
 	help: ['?']
 };
 
@@ -69,6 +70,7 @@ export const SHORTCUT_HELP = [
 	{ keys: SHORTCUT_KEYS.previous, description: 'Previous video' },
 	{ keys: SHORTCUT_KEYS.replay, description: 'Replay from the start' },
 	{ keys: SHORTCUT_KEYS.playPause, description: 'Play / pause' },
+	{ keys: SHORTCUT_KEYS.undo, description: 'Undo the last rating' },
 	{ keys: SHORTCUT_KEYS.fullscreen, description: 'Fullscreen' },
 	{ keys: SHORTCUT_KEYS.help, description: 'Show this list' }
 ];
@@ -104,17 +106,24 @@ export function shortcutsEnabled(event, doc) {
  * Translate a keydown into the action it stands for.
  *
  * `Shift` is only ever a modifier for fullscreen and the help list, so `F` keeps
- * meaning the F tier while `Shift+F` goes fullscreen. Any other modifier belongs
- * to the browser or the OS and is left alone.
+ * meaning the F tier while `Shift+F` goes fullscreen. `Ctrl`/`Cmd`+`Z` is the one
+ * combination we claim, because that is where every user's hand goes to undo; any
+ * other modifier belongs to the browser or the OS and is left alone.
  *
  * @param {{ key?: string, shiftKey?: boolean, ctrlKey?: boolean, metaKey?: boolean, altKey?: boolean }} event
  * @returns {ShortcutAction|null} `null` when the key means nothing here.
  */
 export function shortcutFor(event) {
-	if (!event || event.ctrlKey || event.metaKey || event.altKey) return null;
+	if (!event) return null;
 
 	const key = typeof event.key === 'string' ? event.key : '';
 	const lower = key.toLowerCase();
+
+	// `Shift+Ctrl+Z` is redo, which we do not have — leave it to the browser.
+	if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && lower === 'z') {
+		return { type: 'undo' };
+	}
+	if (event.ctrlKey || event.metaKey || event.altKey) return null;
 
 	if (event.shiftKey) {
 		if (lower === 'f') return { type: 'fullscreen' };
@@ -133,6 +142,8 @@ export function shortcutFor(event) {
 		case ' ':
 		case 'Spacebar': // older WebKit
 			return { type: 'playPause' };
+		case 'Backspace':
+			return { type: 'undo' };
 		case '?':
 			return { type: 'help' };
 	}
@@ -142,6 +153,8 @@ export function shortcutFor(event) {
 			return { type: 'next' };
 		case 'p':
 			return { type: 'previous' };
+		case 'u':
+			return { type: 'undo' };
 		case 'r':
 		case '0':
 			return { type: 'replay' };

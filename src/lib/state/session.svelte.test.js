@@ -263,3 +263,140 @@ describe('progress', () => {
 		expect(session.progress).toEqual({ done: 1, total: 1 });
 	});
 });
+
+describe('undo', () => {
+	it('starts empty', () => {
+		expect(session.canUndo).toBe(false);
+		expect(session.lastUndo).toBeNull();
+		expect(session.undo()).toBeNull();
+	});
+
+	it('describes the step it would take back', () => {
+		session.rateCurrent('C');
+		expect(session.lastUndo).toMatchObject({
+			kind: 'rate',
+			videoId: 'v1',
+			title: 'Title v1',
+			rating: 'C',
+			previousRating: null,
+			previousIndex: 0
+		});
+	});
+
+	it('restores the previous rating and goes back to that video', () => {
+		session.rateCurrent('C');
+		expect(session.currentVideo?.id).toBe('v4');
+
+		expect(session.undo()).toMatchObject({ videoId: 'v1' });
+		expect(library.activeVideos[0].rating).toBeNull();
+		expect(session.currentVideo?.id).toBe('v1');
+		expect(session.canUndo).toBe(false);
+	});
+
+	it('restores a rating that replaced an earlier one, past the filter', () => {
+		settings.skipRated = false;
+		session.jumpTo('v2'); // already S
+		session.rateCurrent('D');
+		settings.skipRated = true;
+
+		expect(session.undo()).toMatchObject({ previousRating: 'S' });
+		expect(library.activeVideos[1].rating).toBe('S');
+		// Rated and `skipRated` is on, so only a pin can bring it back.
+		expect(session.currentVideo?.id).toBe('v2');
+	});
+
+	it('takes back "mark unavailable"', () => {
+		expect(session.markCurrentUnavailable()).toEqual({ id: 'v1', title: 'Title v1' });
+		expect(library.activeVideos[0].unavailable).toBe(true);
+		expect(queueIds()).toEqual(['v4']);
+
+		expect(session.undo()).toMatchObject({ kind: 'unavailable', videoId: 'v1' });
+		expect(library.activeVideos[0].unavailable).toBe(false);
+		expect(queueIds()).toEqual(['v1', 'v4']);
+		expect(session.currentVideo?.id).toBe('v1');
+	});
+
+	it('leaves a video unavailable that already was before the step', () => {
+		settings.skipRated = false;
+		session.jumpTo('v2');
+		library.markUnavailable('v2');
+		session.rateCurrent('D');
+
+		session.undo();
+		expect(library.activeVideos[1].unavailable).toBe(true);
+	});
+
+	it('walks back one step at a time', () => {
+		session.rateCurrent('A'); // v1
+		session.rateCurrent('B'); // v4
+
+		session.undo();
+		expect(library.activeVideos[3].rating).toBeNull();
+		expect(library.activeVideos[0].rating).toBe('A');
+
+		session.undo();
+		expect(library.activeVideos[0].rating).toBeNull();
+		expect(session.canUndo).toBe(false);
+	});
+
+	it('restores anyway when the video was rated again in the meantime', () => {
+		session.rateCurrent('A'); // v1 → A
+		library.rate('v1', 'F'); // e.g. from the Browse page
+
+		session.undo();
+		expect(library.activeVideos[0].rating).toBeNull();
+	});
+
+	it('keeps at most 50 steps', async () => {
+		await boot(
+			storedLibrary([
+				makePlaylist({
+					id: 'PL1',
+					videos: Array.from({ length: 60 }, (_, index) =>
+						makeVideo({ id: `v${index}`, position: index })
+					)
+				})
+			])
+		);
+
+		for (let i = 0; i < 60; i++) session.rateCurrent('A');
+		expect(session.lastUndo?.videoId).toBe('v59');
+
+		for (let i = 0; i < 50; i++) expect(session.undo()).not.toBeNull();
+		expect(session.canUndo).toBe(false);
+		// The ten oldest steps fell off the stack, so those ratings stand.
+		expect(library.activeVideos[0].rating).toBe('A');
+		expect(library.activeVideos[9].rating).toBe('A');
+		expect(library.activeVideos[10].rating).toBeNull();
+	});
+
+	it('does not reach across a playlist switch', async () => {
+		await boot(
+			storedLibrary([
+				makePlaylist({ id: 'PL1', videos: [makeVideo({ id: 'v1' })] }),
+				makePlaylist({ id: 'PL2', videos: [makeVideo({ id: 'w1' })] })
+			])
+		);
+
+		session.rateCurrent('A');
+		expect(session.canUndo).toBe(true);
+
+		library.setActive('PL2');
+		expect(session.canUndo).toBe(false);
+		expect(session.lastUndo).toBeNull();
+		expect(session.undo()).toBeNull();
+
+		// The step is gone for good, not just hidden while PL2 is active.
+		session.rateCurrent('B');
+		session.undo();
+		library.setActive('PL1');
+		expect(session.canUndo).toBe(false);
+		expect(library.playlists[0].videos[0].rating).toBe('A');
+	});
+
+	it('can be cleared', () => {
+		session.rateCurrent('A');
+		session.clearUndo();
+		expect(session.canUndo).toBe(false);
+	});
+});

@@ -26,6 +26,30 @@ import { settings } from './settings.svelte.js';
  * @property {number} total - Playable videos of the active playlist.
  */
 
+/**
+ * One reversible step of the session.
+ *
+ * `previousRating` and `wasUnavailable` are what the video looked like before, so
+ * undoing restores exactly that; `title` and `rating` are what the UI says the step
+ * *was* ("Undo: Test AMV 4 → C").
+ *
+ * @typedef {Object} UndoEntry
+ * @property {'rate'|'unavailable'} kind
+ * @property {string} videoId
+ * @property {string} title
+ * @property {Rating|null} rating - The rating the step assigned; `null` for a
+ *   cleared rating and for "mark unavailable".
+ * @property {Rating|null} previousRating
+ * @property {boolean} wasUnavailable
+ * @property {number} previousIndex - Queue position the step started from.
+ */
+
+/**
+ * How many steps back the undo stack reaches. Deep enough to walk back out of a
+ * misclick streak, shallow enough to stay a stack and not a history.
+ */
+const UNDO_LIMIT = 50;
+
 class Session {
 	/** @type {Rating[]} Selected tiers; empty means "no tier filter". */
 	#tiers = $state([]);
@@ -36,6 +60,23 @@ class Session {
 
 	/** @type {string|null} Video {@link jumpTo} forced into the queue past the filter. */
 	#pinnedId = $state(null);
+
+	/** @type {UndoEntry[]} Oldest first; see {@link undo}. In memory only. */
+	#undoStack = $state([]);
+
+	/** @type {string|null} Playlist {@link #undoStack} was collected on. */
+	#undoPlaylistId = $state(null);
+
+	/**
+	 * @type {UndoEntry[]} The stack as far as it still applies: a step recorded on
+	 * another playlist cannot be undone here, because the video it names is not in
+	 * this playlist.
+	 */
+	#undoable = $derived(
+		this.#undoPlaylistId === library.activePlaylistId
+			? this.#undoStack
+			: /** @type {UndoEntry[]} */ ([])
+	);
 
 	/**
 	 * @type {Video[]} Everything the session is about, rated or not — the basis of
@@ -175,10 +216,110 @@ class Session {
 		const video = this.currentVideo;
 		if (!video) return false;
 
+		this.#pushUndo({
+			kind: 'rate',
+			videoId: video.id,
+			title: video.title,
+			rating,
+			previousRating: video.rating,
+			wasUnavailable: video.unavailable,
+			previousIndex: this.index
+		});
 		library.rate(video.id, rating);
 		if (settings.autoAdvance) this.advancePast(video.id);
 
 		return true;
+	}
+
+	/**
+	 * Flag the current video as unplayable and move on — the manual counterpart to
+	 * the player reporting an error, and undoable like a rating.
+	 *
+	 * @returns {{ id: string, title: string }|null} The video that was flagged,
+	 *   `null` when there was none.
+	 */
+	markCurrentUnavailable() {
+		const video = this.currentVideo;
+		if (!video) return null;
+
+		const flagged = { id: video.id, title: video.title };
+		this.#pushUndo({
+			kind: 'unavailable',
+			videoId: video.id,
+			title: video.title,
+			rating: null,
+			previousRating: video.rating,
+			wasUnavailable: video.unavailable,
+			previousIndex: this.index
+		});
+		library.markUnavailable(flagged.id);
+		this.advancePast(flagged.id);
+
+		return flagged;
+	}
+
+	/** @returns {boolean} Whether there is a step to take back. */
+	get canUndo() {
+		return this.#undoable.length > 0;
+	}
+
+	/**
+	 * @returns {UndoEntry|null} The step {@link undo} would take back — what the
+	 * button's tooltip and the toast describe.
+	 */
+	get lastUndo() {
+		const entry = this.#undoable.at(-1);
+		return entry ? { ...entry } : null;
+	}
+
+	/**
+	 * Take back the last rating (or "mark unavailable") and go back to that video.
+	 *
+	 * The previous value is restored unconditionally, even when the video was rated
+	 * again elsewhere in the meantime: undo is an explicit request, not a merge.
+	 *
+	 * @returns {UndoEntry|null} The step that was taken back, `null` when there was
+	 *   none.
+	 */
+	undo() {
+		if (!this.canUndo) return null;
+
+		const entry = /** @type {UndoEntry} */ (this.#undoStack.pop());
+		if (entry.kind === 'unavailable' && !entry.wasUnavailable) library.markAvailable(entry.videoId);
+		library.rate(entry.videoId, entry.previousRating);
+
+		// The video is back in play, so it is back in the queue — except when a filter
+		// excludes it, which `jumpTo` pins past. Only a video the playlist lost for
+		// good falls through to the remembered position.
+		if (!this.jumpTo(entry.videoId)) {
+			this.#index = Math.max(0, entry.previousIndex);
+		}
+
+		return entry;
+	}
+
+	/**
+	 * Forget every recorded step — the stack is about the session in front of the
+	 * user, not about the library's history.
+	 *
+	 * @returns {void}
+	 */
+	clearUndo() {
+		this.#undoStack = [];
+		this.#undoPlaylistId = library.activePlaylistId;
+	}
+
+	/**
+	 * @param {UndoEntry} entry
+	 * @returns {void}
+	 */
+	#pushUndo(entry) {
+		if (this.#undoPlaylistId !== library.activePlaylistId) {
+			this.#undoStack = [];
+			this.#undoPlaylistId = library.activePlaylistId;
+		}
+		this.#undoStack.push(entry);
+		if (this.#undoStack.length > UNDO_LIMIT) this.#undoStack.shift();
 	}
 
 	/**

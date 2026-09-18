@@ -20,6 +20,7 @@
 	import TierBar from '$lib/components/rate/TierBar.svelte';
 	import { parseRateParams, rateQuery } from '$lib/components/rate/params.js';
 	import { shortcutFor, shortcutsEnabled } from '$lib/components/rate/shortcuts.js';
+	import { describeUndo } from '$lib/components/rate/undo.js';
 	import { library } from '$lib/state/library.svelte.js';
 	import { session } from '$lib/state/session.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
@@ -44,6 +45,7 @@
 
 	const current = $derived(session.currentVideo);
 	const playing = $derived(playerState === PLAYER_STATE.PLAYING);
+	const undoLabel = $derived(describeUndo(session.lastUndo));
 
 	// Read once, at setup: the parameters are a starting point, not state the page
 	// keeps in sync with the session (see `rateQuery`). The filter has to be in place
@@ -98,17 +100,40 @@
 	 */
 	function rate(rating) {
 		if (!current) return;
+		const { title } = current;
 		awaitingRating = false;
-		session.rateCurrent(rating);
+		if (!session.rateCurrent(rating)) return;
+
+		// Short-lived by design: the toast is the fastest way back from a misclick,
+		// not a log. The Undo button next to the tier bar is the lasting one.
+		toast.success(`${title} → ${rating}`, {
+			duration: 3000,
+			action: { label: 'Undo', onClick: () => undo() }
+		});
+	}
+
+	/** @returns {void} */
+	function undo() {
+		const entry = session.undo();
+		if (!entry) {
+			toast.info('There is nothing to undo.');
+			return;
+		}
+		awaitingRating = false;
+		toast.info(
+			entry.kind === 'unavailable'
+				? `"${entry.title}" is back in the queue.`
+				: `Took back ${entry.rating ?? 'the cleared rating'} for "${entry.title}".`
+		);
 	}
 
 	/** @returns {void} */
 	function markUnavailable() {
-		if (!current) return;
-		const { id, title } = current;
-		library.markUnavailable(id);
-		toast.info(`Marked "${title}" as unavailable.`);
-		session.advancePast(id);
+		const flagged = session.markCurrentUnavailable();
+		if (!flagged) return;
+		toast.info(`Marked "${flagged.title}" as unavailable.`, {
+			action: { label: 'Undo', onClick: () => undo() }
+		});
 	}
 
 	/** @returns {void} */
@@ -208,6 +233,9 @@
 			case 'fullscreen':
 				requestFullscreen();
 				break;
+			case 'undo':
+				undo();
+				break;
 			case 'help':
 				helpOpen = !helpOpen;
 				break;
@@ -278,6 +306,9 @@
 					onreplay={() => player?.replay()}
 					onplaypause={togglePlay}
 					onfullscreen={requestFullscreen}
+					canUndo={session.canUndo}
+					{undoLabel}
+					onundo={undo}
 				/>
 
 				{#if awaitingRating}
