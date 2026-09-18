@@ -193,13 +193,24 @@ class Session {
 		if (!video) return false;
 
 		library.rate(video.id, rating);
-		if (!settings.autoAdvance) return true;
-
-		// When the rating removed the video from the queue, the next one already slid
-		// into this index and advancing would skip it.
-		if (this.queue.some((candidate) => candidate.id === video.id)) this.next();
+		if (settings.autoAdvance) this.advancePast(video.id);
 
 		return true;
+	}
+
+	/**
+	 * Move on after something happened to `videoId` — a rating, or the library
+	 * flagging it as unavailable.
+	 *
+	 * When that took the video out of the queue, the next one already slid into this
+	 * index and advancing on top of it would skip one.
+	 *
+	 * @param {string} videoId
+	 * @returns {boolean} Whether the index moved.
+	 */
+	advancePast(videoId) {
+		if (!this.queue.some((candidate) => candidate.id === videoId)) return false;
+		return this.next();
 	}
 }
 

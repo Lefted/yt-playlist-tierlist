@@ -219,6 +219,33 @@ describe('rateCurrent', () => {
 	});
 });
 
+describe('advancePast', () => {
+	it('moves on when the video left the queue', () => {
+		// Rating v1 while `skipRated` is on drops it out; v4 slides into index 0.
+		library.rate('v1', 'A');
+		expect(session.advancePast('v1')).toBe(false);
+		expect(session.currentVideo?.id).toBe('v4');
+	});
+
+	it('advances by one while the video is still in the queue', () => {
+		settings.skipRated = false;
+		expect(session.advancePast('v1')).toBe(true);
+		expect(session.currentVideo?.id).toBe('v2');
+	});
+
+	it('does not move at the end of the queue', () => {
+		settings.skipRated = false;
+		session.jumpTo('v5');
+		expect(session.advancePast('v5')).toBe(false);
+		expect(session.currentVideo?.id).toBe('v5');
+	});
+
+	it('ignores a video the queue never had', () => {
+		expect(session.advancePast('nope')).toBe(false);
+		expect(session.currentVideo?.id).toBe('v1');
+	});
+});
+
 describe('progress', () => {
 	it('reports the rated share of the playable videos', () => {
 		expect(session.progress).toEqual({ done: 2, total: 4 });

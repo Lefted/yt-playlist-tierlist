@@ -19,7 +19,7 @@
 	import SessionToolbar from '$lib/components/rate/SessionToolbar.svelte';
 	import TierBar from '$lib/components/rate/TierBar.svelte';
 	import { parseRateParams, rateQuery } from '$lib/components/rate/params.js';
-	import { shortcutFor, shortcutsEnabled } from '$lib/components/rate/shortcuts.js';
+	import { isTypingTarget, shortcutFor, shortcutsEnabled } from '$lib/components/rate/shortcuts.js';
 	import { library } from '$lib/state/library.svelte.js';
 	import { session } from '$lib/state/session.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
@@ -27,6 +27,9 @@
 
 	/** @type {Player|null} */
 	let player = $state(null);
+
+	/** @type {TierBar|null} */
+	let tierBar = $state(null);
 
 	/** @type {number} Latest state reported by the player; drives the play/pause icon. */
 	let playerState = $state(PLAYER_STATE.UNSTARTED);
@@ -89,26 +92,13 @@
 		session.rateCurrent(rating);
 	}
 
-	/**
-	 * Move on after the current video left the queue.
-	 *
-	 * Dropping out shifts the next video into the current index by itself, so
-	 * advancing on top of that would skip one.
-	 *
-	 * @param {string} videoId
-	 * @returns {void}
-	 */
-	function advancePast(videoId) {
-		if (session.queue.some((video) => video.id === videoId)) session.next();
-	}
-
 	/** @returns {void} */
 	function markUnavailable() {
 		if (!current) return;
 		const { id, title } = current;
 		library.markUnavailable(id);
 		toast.info(`Marked "${title}" as unavailable.`);
-		advancePast(id);
+		session.advancePast(id);
 	}
 
 	/** @returns {void} */
@@ -122,19 +112,24 @@
 		else player?.play();
 	}
 
-	/** @returns {void} */
-	function requestFullscreen() {
-		if (player?.requestFullscreen()) return;
+	/** @returns {Promise<void>} */
+	async function requestFullscreen() {
+		if (await player?.requestFullscreen()) return;
 		toast.info('This browser will not put the player into fullscreen.');
 	}
 
 	/** @returns {void} */
 	function handleEnded() {
-		if (!settings.autoAdvance) return;
+		if (!current || !settings.autoAdvance) return;
+
 		// An unrated video is the whole point of the session — wait for the verdict
 		// instead of moving on.
-		if (current?.rating !== null) session.next();
-		else awaitingRating = true;
+		if (current.rating !== null) {
+			session.next();
+			return;
+		}
+		awaitingRating = true;
+		tierBar?.focus();
 	}
 
 	/**
@@ -165,7 +160,7 @@
 		const { id, title } = current;
 		library.markUnavailable(id);
 		toast.error(`"${title}" cannot be played — marked as unavailable and skipped.`);
-		advancePast(id);
+		session.advancePast(id);
 	}
 
 	/**
@@ -173,11 +168,14 @@
 	 * @returns {void}
 	 */
 	function handleKeydown(event) {
-		if (!current || event.repeat) return;
-		if (!shortcutsEnabled(event, document)) return;
+		if (!current || event.repeat || isTypingTarget(event.target)) return;
 
 		const action = shortcutFor(event);
 		if (!action) return;
+
+		// Overlays own the keyboard while they are up — except that `?` has to be able
+		// to close the very list it opened.
+		if (!shortcutsEnabled(event, document) && !(action.type === 'help' && helpOpen)) return;
 		event.preventDefault();
 
 		switch (action.type) {
@@ -253,7 +251,7 @@
 			home-indicator inset, so this lifts the bar clear of both.
 		-->
 		<div
-			class="bg-background/95 sticky bottom-(--app-tab-bar-inset) z-30 mt-3 border-t px-3 pt-1 pb-3 backdrop-blur sm:px-4"
+			class="bg-background/95 sticky bottom-(--app-tab-bar-inset) z-30 mt-3 border-t px-3 pt-1 pb-3 backdrop-blur sm:px-4 md:pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
 		>
 			<div class="mx-auto flex w-full max-w-4xl flex-col gap-1.5">
 				<PlaybackControls
@@ -273,7 +271,12 @@
 					</p>
 				{/if}
 
-				<TierBar rating={current.rating} onrate={rate} highlight={awaitingRating} />
+				<TierBar
+					bind:this={tierBar}
+					rating={current.rating}
+					onrate={rate}
+					highlight={awaitingRating}
+				/>
 			</div>
 		</div>
 	</main>

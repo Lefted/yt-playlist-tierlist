@@ -20,6 +20,17 @@ import { isRating, RATING_ORDER } from '$lib/types.js';
 const FALSY = ['0', 'false', 'no', 'off'];
 
 /**
+ * The tiers of an untrusted list, deduplicated and in `RATING_ORDER`.
+ *
+ * @param {Iterable<unknown>} values
+ * @returns {Rating[]}
+ */
+function tiersOf(values) {
+	const selected = [...values].filter(isRating);
+	return RATING_ORDER.filter((rating) => selected.includes(rating));
+}
+
+/**
  * Read the session parameters out of a URL.
  *
  * Unknown tiers are dropped rather than rejected — a stale or hand-edited link
@@ -31,11 +42,9 @@ const FALSY = ['0', 'false', 'no', 'off'];
 export function parseRateParams(searchParams) {
 	const videoId = searchParams?.get('v')?.trim() || null;
 
-	const raw = (searchParams?.get('tiers') ?? '')
-		.split(',')
-		.map((part) => part.trim().toUpperCase())
-		.filter(isRating);
-	const tiers = RATING_ORDER.filter((rating) => raw.includes(rating));
+	const tiers = tiersOf(
+		(searchParams?.get('tiers') ?? '').split(',').map((part) => part.trim().toUpperCase())
+	);
 
 	const unrated = searchParams?.get('unrated') ?? null;
 	const includeUnrated = unrated === null || !FALSY.includes(unrated.toLowerCase());
@@ -54,8 +63,7 @@ export function parseRateParams(searchParams) {
  * @returns {string} Either `''` or a string starting with `?`.
  */
 export function rateQuery(filter) {
-	const selected = [...filter.tiers].filter(isRating);
-	const tiers = RATING_ORDER.filter((rating) => selected.includes(rating));
+	const tiers = tiersOf(filter.tiers);
 
 	// Built by hand rather than with URLSearchParams, which would escape the
 	// separating comma; every value here comes from a fixed, URL-safe alphabet.

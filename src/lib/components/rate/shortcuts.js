@@ -23,11 +23,12 @@ import { RATING_BY_KEY, TIERS } from '$lib/tiers.js';
 const TYPING_TAGS = ['input', 'textarea', 'select'];
 
 /**
- * Anything layered over the page takes the keyboard. bits-ui only renders these
- * while they are open, so their mere presence is the "is something open?" answer.
+ * Anything layered over the page takes the keyboard.
  *
- * Its popover content carries no ARIA role (it is not a dialog), hence the
- * `data-slot` shadcn-svelte puts on it.
+ * bits-ui popover content carries no ARIA role (it is not a dialog), hence the
+ * `data-slot` shadcn-svelte puts on it. An overlay that is animating out keeps its
+ * node until the animation ends, but is already closed as far as the keyboard is
+ * concerned — `data-state="closed"` is how it says so.
  */
 const OVERLAY_SELECTOR = [
 	'[role="dialog"]',
@@ -35,20 +36,41 @@ const OVERLAY_SELECTOR = [
 	'[role="menu"]',
 	'[role="listbox"]',
 	'[data-slot="popover-content"]'
-].join(', ');
+]
+	.map((selector) => `${selector}:not([data-state="closed"])`)
+	.join(', ');
+
+/**
+ * What each action is labelled with, for the help list and the button tooltips —
+ * one table, so a rebinding cannot leave a stale hint behind.
+ *
+ * These are display labels ('→', '⇧'), not `KeyboardEvent.key` values;
+ * {@link shortcutFor} below owns the matching.
+ *
+ * @type {Record<string, string[]>}
+ */
+export const SHORTCUT_KEYS = {
+	rate: TIERS.map((tier) => tier.key.toUpperCase()),
+	next: ['N', '→'],
+	previous: ['P', '←'],
+	replay: ['R', '0'],
+	playPause: ['Space'],
+	fullscreen: ['⇧', 'F'],
+	help: ['?']
+};
 
 /**
  * The shortcut list for the help popover, in the order it is shown.
  * @type {{ keys: string[], description: string }[]}
  */
 export const SHORTCUT_HELP = [
-	{ keys: TIERS.map((tier) => tier.key.toUpperCase()), description: 'Rate the current video' },
-	{ keys: ['N', '→'], description: 'Next video' },
-	{ keys: ['P', '←'], description: 'Previous video' },
-	{ keys: ['R', '0'], description: 'Replay from the start' },
-	{ keys: ['Space'], description: 'Play / pause' },
-	{ keys: ['Shift', 'F'], description: 'Fullscreen' },
-	{ keys: ['?'], description: 'Show this list' }
+	{ keys: SHORTCUT_KEYS.rate, description: 'Rate the current video' },
+	{ keys: SHORTCUT_KEYS.next, description: 'Next video' },
+	{ keys: SHORTCUT_KEYS.previous, description: 'Previous video' },
+	{ keys: SHORTCUT_KEYS.replay, description: 'Replay from the start' },
+	{ keys: SHORTCUT_KEYS.playPause, description: 'Play / pause' },
+	{ keys: SHORTCUT_KEYS.fullscreen, description: 'Fullscreen' },
+	{ keys: SHORTCUT_KEYS.help, description: 'Show this list' }
 ];
 
 /**

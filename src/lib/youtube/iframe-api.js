@@ -40,10 +40,8 @@ const UNAVAILABLE_CODES = [100, 101, 150];
  * @property {(videoId: string) => void} cueVideoById - Load, but wait for a play.
  * @property {() => void} playVideo
  * @property {() => void} pauseVideo
- * @property {() => void} stopVideo
  * @property {(seconds: number, allowSeekAhead?: boolean) => void} seekTo
  * @property {() => number} getCurrentTime
- * @property {() => number} getDuration
  * @property {() => HTMLIFrameElement|null} getIframe
  * @property {() => void} destroy
  */

@@ -50,6 +50,20 @@ The layout already reserves `--app-tab-bar-inset` below page content, so pages
 need no bottom padding of their own. Anything a page pins to the bottom of the
 viewport itself should offset by that variable.
 
+## Rating session
+
+`/rate` is the focused loop: watch, press a tier, the next video starts.
+
+- `s a b c d f` rate, `n`/`→` next, `p`/`←` previous, `r`/`0` replay, `space`
+  play/pause, `shift+f` fullscreen, `?` shows the list. They stand down while a
+  popover is open or the focus is in a field.
+- `?v=<videoId>` starts the session at a video — even one the filter excludes.
+  `?tiers=S,A` and `?unrated=0` mirror the queue filter and stay in sync with the
+  toolbar.
+- `src/lib/components/Player.svelte` wraps the YouTube IFrame Player API: it takes
+  a `videoId` plus callbacks and exposes `play`, `pause`, `seekTo`, `replay`,
+  `getCurrentTime` and `requestFullscreen` via `bind:this`.
+
 ## Deployment
 
 `npm run build` produces a fully static `build/` folder. Serve it from any static
@@ -72,6 +86,8 @@ place; the configuration lives in `components.json`.
   namespaced `ytpt:v1:<name>`.
 - `src/lib/youtube/api.js` — pure YouTube Data API calls (`parsePlaylistInput`,
   `fetchPlaylistMeta`, `fetchPlaylistVideos`) that fail with a typed `YouTubeApiError`.
+- `src/lib/youtube/iframe-api.js` — loads the IFrame Player API once per page and
+  maps its error codes to `unavailable` / `other`.
 - `src/lib/playlist.js` — pure playlist operations (normalising untrusted data,
   reconciling the playback order, merging a re-import) that the state modules build on.
 - `src/lib/state/*.svelte.js` — rune-based singletons: `settings`, `library`

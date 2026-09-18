@@ -193,11 +193,15 @@
 	/**
 	 * Put the player's iframe into fullscreen.
 	 *
-	 * @returns {boolean} `false` when the browser refuses — iOS Safari only allows
-	 *   fullscreen on a `<video>` element, which is out of reach inside a
-	 *   cross-origin iframe, so callers should treat this as "not available here".
+	 * Awaits the browser's answer instead of only the call, because a refusal
+	 * usually arrives as a rejected promise: iOS Safari allows fullscreen on a
+	 * `<video>` element only, which is out of reach inside a cross-origin iframe,
+	 * and every browser rejects a request that did not come from a user gesture.
+	 *
+	 * @returns {Promise<boolean>} `false` when the browser refused, so callers can
+	 *   say "not available here".
 	 */
-	export function requestFullscreen() {
+	export async function requestFullscreen() {
 		const frame = /** @type {any} */ (player?.getIframe() ?? null);
 		if (!frame) return false;
 
@@ -205,9 +209,7 @@
 		if (typeof request !== 'function') return false;
 
 		try {
-			const result = request.call(frame);
-			// Rejects when the call did not come from a user gesture; not worth surfacing.
-			if (result && typeof result.catch === 'function') result.catch(() => {});
+			await request.call(frame);
 			return true;
 		} catch {
 			return false;

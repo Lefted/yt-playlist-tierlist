@@ -24,19 +24,12 @@
 	 * @typedef {Object} Props
 	 * @property {() => void} onunavailable - Flag the current video as unplayable.
 	 * @property {() => void} onshuffle
-	 * @property {boolean} [disabled] - No current video to act on.
 	 * @property {boolean} [helpOpen] - Bindable, so the `?` shortcut can open the list.
 	 * @property {string} [class]
 	 */
 
 	/** @type {Props} */
-	let {
-		onunavailable,
-		onshuffle,
-		disabled = false,
-		helpOpen = $bindable(false),
-		class: className
-	} = $props();
+	let { onunavailable, onshuffle, helpOpen = $bindable(false), class: className } = $props();
 
 	const selectedTiers = $derived([...session.filter.tiers]);
 	const filtered = $derived(selectedTiers.length > 0 || !session.includeUnrated);
@@ -142,7 +135,7 @@
 		</Popover.Content>
 	</Popover.Root>
 
-	<Button variant="ghost" size="sm" {disabled} onclick={onunavailable}>
+	<Button variant="ghost" size="sm" onclick={onunavailable}>
 		<Ban aria-hidden="true" />
 		Mark unavailable
 	</Button>

@@ -104,19 +104,17 @@ describe('shortcutsEnabled', () => {
 		expect(shortcutsEnabled({ target: { tagName: 'BODY' } }, documentStub('dialog'))).toBe(false);
 	});
 
-	it('asks for popover content, which carries no ARIA role', () => {
+	it('asks for open popover content, which carries no ARIA role', () => {
 		/** @type {string[]} */
 		const asked = [];
 		shortcutsEnabled(
 			{ target: null },
-			{
-				querySelector: (selector) => {
-					asked.push(selector);
-					return null;
-				}
-			}
+			{ querySelector: (selector) => asked.push(selector) && null }
 		);
+
+		// A popover is only an overlay until it starts animating out.
 		expect(asked[0]).toContain('[data-slot="popover-content"]');
+		expect(asked[0]).toContain(':not([data-state="closed"])');
 	});
 
 	it('survives a missing document', () => {

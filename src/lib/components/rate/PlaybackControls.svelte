@@ -16,6 +16,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import { cn } from '$lib/utils.js';
+	import { SHORTCUT_KEYS } from './shortcuts.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -42,55 +43,89 @@
 		onfullscreen,
 		class: className
 	} = $props();
-</script>
 
-{#snippet control(
-	/** @type {string} */ label,
-	/** @type {string[]} */ keys,
-	/** @type {any} */ Icon,
-	/** @type {() => void} */ onclick,
-	/** @type {boolean} */ disabled
-)}
-	<Tooltip.Root>
-		<Tooltip.Trigger>
-			{#snippet child({ props })}
-				<Button
-					{...props}
-					variant="ghost"
-					size="icon-lg"
-					class="size-11 sm:size-9"
-					aria-label={label}
-					aria-keyshortcuts={keys.join(' ')}
-					{disabled}
-					{onclick}
-				>
-					<Icon aria-hidden="true" />
-				</Button>
-			{/snippet}
-		</Tooltip.Trigger>
-		<Tooltip.Content>
-			{label}
-			{#each keys as key (key)}
-				<kbd data-slot="kbd" class="bg-background/20 rounded px-1 py-0.5 font-mono text-[0.625rem]"
-					>{key}</kbd
-				>
-			{/each}
-		</Tooltip.Content>
-	</Tooltip.Root>
-{/snippet}
+	/**
+	 * @typedef {Object} Control
+	 * @property {string} id - Stable across a label change (Play ↔ Pause).
+	 * @property {string} label
+	 * @property {string[]} keys - Display labels, see `SHORTCUT_KEYS`.
+	 * @property {any} icon - A `@lucide/svelte` icon component.
+	 * @property {() => void} onclick
+	 * @property {boolean} [disabled]
+	 */
+
+	/** @type {Control[]} */
+	const controls = $derived([
+		{
+			id: 'previous',
+			label: 'Previous',
+			keys: SHORTCUT_KEYS.previous,
+			icon: SkipBack,
+			onclick: onprevious,
+			disabled: !canPrevious
+		},
+		{
+			id: 'replay',
+			label: 'Replay',
+			keys: SHORTCUT_KEYS.replay,
+			icon: RotateCcw,
+			onclick: onreplay
+		},
+		{
+			id: 'play-pause',
+			label: playing ? 'Pause' : 'Play',
+			keys: SHORTCUT_KEYS.playPause,
+			icon: playing ? Pause : Play,
+			onclick: onplaypause
+		},
+		{
+			id: 'fullscreen',
+			label: 'Fullscreen',
+			keys: SHORTCUT_KEYS.fullscreen,
+			icon: Maximize,
+			onclick: onfullscreen
+		},
+		{
+			id: 'skip',
+			label: 'Skip',
+			keys: SHORTCUT_KEYS.next,
+			icon: SkipForward,
+			onclick: onnext,
+			disabled: !canNext
+		}
+	]);
+</script>
 
 <Tooltip.Provider delayDuration={400}>
 	<div class={cn('flex items-center justify-center gap-1', className)}>
-		{@render control('Previous', ['P'], SkipBack, onprevious, !canPrevious)}
-		{@render control('Replay', ['R'], RotateCcw, onreplay, false)}
-		{@render control(
-			playing ? 'Pause' : 'Play',
-			['Space'],
-			playing ? Pause : Play,
-			onplaypause,
-			false
-		)}
-		{@render control('Fullscreen', ['⇧', 'F'], Maximize, onfullscreen, false)}
-		{@render control('Skip', ['N'], SkipForward, onnext, !canNext)}
+		{#each controls as control (control.id)}
+			{@const Icon = control.icon}
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-lg"
+							class="size-11 sm:size-9"
+							aria-label={control.label}
+							disabled={control.disabled}
+							onclick={control.onclick}
+						>
+							<Icon aria-hidden="true" />
+						</Button>
+					{/snippet}
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					{control.label}
+					{#each control.keys as key (key)}
+						<kbd
+							data-slot="kbd"
+							class="bg-background/20 rounded px-1 py-0.5 font-mono text-[0.625rem]">{key}</kbd
+						>
+					{/each}
+				</Tooltip.Content>
+			</Tooltip.Root>
+		{/each}
 	</div>
 </Tooltip.Provider>
