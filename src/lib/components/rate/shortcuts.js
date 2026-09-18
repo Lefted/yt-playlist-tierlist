@@ -5,23 +5,36 @@
  * decide what each intent does — and so the mapping can be unit tested without a
  * DOM.
  *
- * Everything is a function of the {@link ShortcutMode} the user picked, and every
- * key hint in the UI (the tier bar's `<kbd>`s, the button tooltips, the help list)
- * is generated from the very same tables: a mode can therefore never be shown a
- * binding it does not have.
+ * Two layers live here:
+ *
+ * - **Player keys** — `k`/`Space`, `m`, the arrows and `j`/`l`. YouTube's own
+ *   player answers these, but only while the iframe has the focus, and the Rate
+ *   page deliberately keeps the focus on our side (issue #9). They are therefore
+ *   proxied here whether the rating keys are on or off: a key that does something
+ *   different depending on a focus you cannot see is a trap.
+ * - **Rating keys** — the tiers, the queue, undo, loop, replay, fullscreen, help.
+ *   These are ours, and the user can switch them off entirely (issue #11).
+ *
+ * Every key hint in the UI (the tier bar's `<kbd>`s, the button tooltips, the help
+ * list) is generated from the same tables, so the page can never promise a key it
+ * does not answer.
  */
 
 import { RATING_BY_KEY, TIERS } from '$lib/tiers.js';
-import { DEFAULT_SHORTCUT_MODE, RATING_ORDER } from '$lib/types.js';
 
 /** @typedef {import('$lib/types.js').Rating} Rating */
-/** @typedef {import('$lib/types.js').ShortcutMode} ShortcutMode */
 
 /**
  * What the user asked for.
  * @typedef {{ type: 'rate', rating: Rating }
- *   | { type: 'next' | 'previous' | 'replay' | 'playPause' | 'fullscreen' | 'undo' | 'loop' | 'help' }} ShortcutAction
+ *   | { type: 'seekBy', seconds: number }
+ *   | { type: 'next' | 'previous' | 'replay' | 'playPause' | 'muteToggle'
+ *       | 'fullscreen' | 'undo' | 'loop' | 'help' }} ShortcutAction
  */
+
+/** How far `←`/`→` and `j`/`l` jump, as YouTube does it. */
+const SMALL_SEEK_SECONDS = 5;
+const LARGE_SEEK_SECONDS = 10;
 
 /**
  * Elements that swallow the shortcuts because the user is typing into them.
@@ -48,44 +61,15 @@ const OVERLAY_SELECTOR = [
 	.join(', ');
 
 /**
- * The tier keys per mode, in `RATING_ORDER`.
+ * The key that assigns each tier, rating → key, straight from `tiers.js`.
  *
- * `digits` exists because `f` is fullscreen everywhere on YouTube and gave people
- * an F rating here (issue #11); `1`–`6` collide with none of `f`, `k`, `j`, `l`.
- *
- * @type {Record<string, Record<Rating, string>>}
- */
-const TIER_KEYS = {
-	letters: Object.fromEntries(TIERS.map((tier) => [tier.rating, tier.key])),
-	digits: Object.fromEntries(RATING_ORDER.map((rating, index) => [rating, String(index + 1)]))
-};
-
-/** @type {Record<string, Record<string, Rating>>} The same tables, key → rating. */
-const RATINGS_BY_KEY = {
-	letters: RATING_BY_KEY,
-	digits: Object.fromEntries(Object.entries(TIER_KEYS.digits).map(([rating, key]) => [key, rating]))
-};
-
-/**
- * The tier keys of a mode: rating → the key that assigns it.
- *
- * @param {ShortcutMode} mode
- * @returns {Record<Rating, string>|null} `null` while shortcuts are off — there is
+ * @param {boolean} [ratingKeys] - `false` while the rating keys are off: there is
  *   no key to show and none to press.
+ * @returns {Record<Rating, string>|null}
  */
-export function tierKeysFor(mode) {
-	return TIER_KEYS[mode] ?? null;
-}
-
-/**
- * Which tier a key stands for in this mode.
- *
- * @param {ShortcutMode} mode
- * @param {string} key - Lower-cased `KeyboardEvent.key`.
- * @returns {Rating|null}
- */
-export function ratingForKey(mode, key) {
-	return RATINGS_BY_KEY[mode]?.[key] ?? null;
+export function tierKeys(ratingKeys = true) {
+	if (!ratingKeys) return null;
+	return Object.fromEntries(TIERS.map((tier) => [tier.rating, tier.key]));
 }
 
 /**
@@ -93,59 +77,73 @@ export function ratingForKey(mode, key) {
  * one table, so a rebinding cannot leave a stale hint behind.
  *
  * These are display labels ('→', '⇧'), not `KeyboardEvent.key` values;
- * {@link shortcutFor} below owns the matching.
+ * {@link shortcutFor} below owns the matching. An empty list means "this key does
+ * not exist right now", so a `{#each}` over it renders nothing.
  *
- * @param {ShortcutMode} [mode]
- * @returns {Record<string, string[]>} Every list is empty while shortcuts are off,
- *   so a `{#each}` over it renders nothing.
+ * @param {boolean} [ratingKeys]
+ * @returns {Record<string, string[]>}
  */
-export function shortcutKeys(mode = DEFAULT_SHORTCUT_MODE) {
-	const tiers = tierKeysFor(mode);
-	// Off keeps the shape and empties it, so a `{#each}` over any entry renders
-	// nothing and no caller has to know which mode it is looking at.
-	if (!tiers) {
-		return Object.fromEntries(
-			Object.keys(shortcutKeys(DEFAULT_SHORTCUT_MODE)).map((action) => [action, []])
-		);
-	}
+export function shortcutKeys(ratingKeys = true) {
+	const tiers = tierKeys(ratingKeys);
 
 	return {
-		rate: RATING_ORDER.map((rating) => tiers[rating].toUpperCase()),
-		next: ['N', '→'],
-		previous: ['P', '←'],
-		// `0` is a tier key's neighbour in digits mode and would read like a seventh
-		// tier, so only `R` survives there.
-		replay: mode === 'digits' ? ['R'] : ['R', '0'],
-		playPause: ['Space'],
-		fullscreen: ['⇧', 'F'],
-		undo: ['U', '⌫', 'Ctrl+Z'],
-		loop: ['L'],
-		help: ['?']
+		// The rating layer, which the user can switch off.
+		rate: tiers ? TIERS.map((tier) => tiers[tier.rating].toUpperCase()) : [],
+		next: ratingKeys ? ['N'] : [],
+		previous: ratingKeys ? ['P'] : [],
+		replay: ratingKeys ? ['R'] : [],
+		undo: ratingKeys ? ['U', '⌫', 'Ctrl+Z'] : [],
+		loop: ratingKeys ? ['⇧', 'L'] : [],
+		fullscreen: ratingKeys ? ['⇧', 'F'] : [],
+		help: ratingKeys ? ['?'] : [],
+
+		// The player layer, which stays either way.
+		playPause: ['K', 'Space'],
+		mute: ['M'],
+		seekBack: ['←', 'J'],
+		seekForward: ['→', 'L']
 	};
 }
 
 /**
- * The shortcut list for the help popover, in the order it is shown.
+ * The shortcut list for the help popover, in the order it is shown and split the
+ * way the user meets it: what the session does, and what the player does.
  *
- * @param {ShortcutMode} [mode]
- * @returns {{ keys: string[], description: string }[]} Empty while shortcuts are
- *   off; the popover says so instead of listing keys nobody can press.
+ * @param {boolean} [ratingKeys]
+ * @returns {{ rating: { keys: string[], description: string }[],
+ *   player: { keys: string[], description: string }[] }} With the rating keys off
+ *   that list is empty, and the popover says so instead.
  */
-export function shortcutTable(mode = DEFAULT_SHORTCUT_MODE) {
-	if (mode === 'off') return [];
+export function shortcutTable(ratingKeys = true) {
+	const keys = shortcutKeys(ratingKeys);
 
-	const keys = shortcutKeys(mode);
-	return [
-		{ keys: keys.rate, description: 'Rate the current video' },
-		{ keys: keys.next, description: 'Next video' },
-		{ keys: keys.previous, description: 'Previous video' },
-		{ keys: keys.replay, description: 'Replay from the start' },
-		{ keys: keys.playPause, description: 'Play / pause' },
-		{ keys: keys.undo, description: 'Undo the last rating' },
-		{ keys: keys.loop, description: 'Loop the current video' },
-		{ keys: keys.fullscreen, description: 'Fullscreen' },
-		{ keys: keys.help, description: 'Show this list' }
-	];
+	/**
+	 * @param {[string[], string][]} rows
+	 * @returns {{ keys: string[], description: string }[]}
+	 */
+	const table = (rows) =>
+		rows
+			.filter(([entry]) => entry.length > 0)
+			.map(([entry, description]) => ({ keys: entry, description }));
+
+	return {
+		rating: table([
+			[keys.rate, 'Rate the current video'],
+			[keys.next, 'Next video'],
+			[keys.previous, 'Previous video'],
+			[keys.replay, 'Replay from the start'],
+			[keys.undo, 'Undo the last rating'],
+			[keys.loop, 'Loop the current video'],
+			[keys.fullscreen, 'Fullscreen'],
+			[keys.help, 'Show this list']
+		]),
+		player: table([
+			[keys.playPause, 'Play / pause'],
+			[keys.mute, 'Mute / unmute'],
+			[keys.seekBack, `Back ${SMALL_SEEK_SECONDS} s / ${LARGE_SEEK_SECONDS} s`],
+			[keys.seekForward, `Forward ${SMALL_SEEK_SECONDS} s / ${LARGE_SEEK_SECONDS} s`]
+		])
+	};
 }
 
 /**
@@ -164,15 +162,18 @@ export function isTypingTarget(target) {
 }
 
 /**
- * Should this keydown reach the session at all?
+ * Should this keydown reach the page at all?
+ *
+ * About the surroundings only — a text field has the focus, or something is
+ * layered over the page. Which keys exist is {@link shortcutFor}'s business,
+ * the user's "shortcuts off" included: that silences the rating keys but keeps
+ * the player ones.
  *
  * @param {{ target?: EventTarget|null }} event
  * @param {{ querySelector?: (selector: string) => unknown }|null} [doc] - Usually `document`.
- * @param {ShortcutMode} [mode] - `'off'` answers `false` to everything.
  * @returns {boolean}
  */
-export function shortcutsEnabled(event, doc, mode = DEFAULT_SHORTCUT_MODE) {
-	if (mode === 'off') return false;
+export function shortcutsEnabled(event, doc) {
 	if (isTypingTarget(event?.target ?? null)) return false;
 	return !doc?.querySelector?.(OVERLAY_SELECTOR);
 }
@@ -180,57 +181,86 @@ export function shortcutsEnabled(event, doc, mode = DEFAULT_SHORTCUT_MODE) {
 /**
  * Translate a keydown into the action it stands for.
  *
- * `Shift` is only ever a modifier for fullscreen and the help list, so in letters
- * mode `F` keeps meaning the F tier while `Shift+F` goes fullscreen.
- * `Ctrl`/`Cmd`+`Z` is the one combination we claim, because that is where every
- * user's hand goes to undo; any other modifier belongs to the browser or the OS
- * and is left alone.
+ * `Shift` marks the two keys a tier would otherwise swallow: `Shift+F` for
+ * fullscreen (plain `f` is the F tier) and `Shift+L` for loop (plain `l` is the
+ * player's "forward 10 s"). `Ctrl`/`Cmd`+`Z` is the one combination we claim,
+ * because that is where every user's hand goes to undo; any other modifier belongs
+ * to the browser or the OS and is left alone.
  *
- * A held key repeats, and a repeat has never been meant as a second verdict — one
- * `f` too long must not rate two videos — so repeats are dropped here rather than
- * at each call site.
+ * A held key repeats. Seeking is the one thing that should follow a held key —
+ * everything else, a rating above all, means exactly once.
  *
  * @param {{ key?: string, shiftKey?: boolean, ctrlKey?: boolean, metaKey?: boolean, altKey?: boolean, repeat?: boolean }} event
- * @param {ShortcutMode} [mode]
- * @returns {ShortcutAction|null} `null` when the key means nothing in this mode.
+ * @param {boolean} [ratingKeys] - `settings.shortcuts`.
+ * @returns {ShortcutAction|null} `null` when the key means nothing here.
  */
-export function shortcutFor(event, mode = DEFAULT_SHORTCUT_MODE) {
-	if (!event || event.repeat || mode === 'off') return null;
+export function shortcutFor(event, ratingKeys = true) {
+	if (!event) return null;
 
+	const action = actionFor(event, ratingKeys);
+	if (event.repeat && action?.type !== 'seekBy') return null;
+	return action;
+}
+
+/**
+ * @param {{ key?: string, shiftKey?: boolean, ctrlKey?: boolean, metaKey?: boolean, altKey?: boolean }} event
+ * @param {boolean} ratingKeys
+ * @returns {ShortcutAction|null}
+ */
+function actionFor(event, ratingKeys) {
 	const key = typeof event.key === 'string' ? event.key : '';
 	const lower = key.toLowerCase();
 
 	// `Shift+Ctrl+Z` is redo, which we do not have — leave it to the browser.
 	if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && lower === 'z') {
-		return { type: 'undo' };
+		return ratingKeys ? { type: 'undo' } : null;
 	}
 	if (event.ctrlKey || event.metaKey || event.altKey) return null;
 
 	if (event.shiftKey) {
+		if (!ratingKeys) return null;
 		if (lower === 'f') return { type: 'fullscreen' };
+		if (lower === 'l') return { type: 'loop' };
 		if (key === '?') return { type: 'help' };
 		return null;
 	}
 
-	const rating = ratingForKey(mode, lower);
-	if (rating) return { type: 'rate', rating };
+	// The tiers first: `f` rates F here, which is exactly why fullscreen moved to
+	// `Shift+F`.
+	if (ratingKeys) {
+		const rating = RATING_BY_KEY[lower];
+		if (rating) return { type: 'rate', rating };
+	}
 
+	// The player layer, which stays either way — see the module comment.
 	switch (key) {
-		case 'ArrowRight':
-			return { type: 'next' };
-		case 'ArrowLeft':
-			return { type: 'previous' };
 		case ' ':
 		case 'Spacebar': // older WebKit
 			return { type: 'playPause' };
+		case 'ArrowRight':
+			return { type: 'seekBy', seconds: SMALL_SEEK_SECONDS };
+		case 'ArrowLeft':
+			return { type: 'seekBy', seconds: -SMALL_SEEK_SECONDS };
+	}
+	switch (lower) {
+		case 'k':
+			return { type: 'playPause' };
+		case 'm':
+			return { type: 'muteToggle' };
+		case 'l':
+			return { type: 'seekBy', seconds: LARGE_SEEK_SECONDS };
+		case 'j':
+			return { type: 'seekBy', seconds: -LARGE_SEEK_SECONDS };
+	}
+
+	if (!ratingKeys) return null;
+
+	switch (key) {
 		case 'Backspace':
 			return { type: 'undo' };
 		case '?':
 			return { type: 'help' };
-		case '0':
-			return mode === 'digits' ? null : { type: 'replay' };
 	}
-
 	switch (lower) {
 		case 'n':
 			return { type: 'next' };
@@ -238,8 +268,6 @@ export function shortcutFor(event, mode = DEFAULT_SHORTCUT_MODE) {
 			return { type: 'previous' };
 		case 'u':
 			return { type: 'undo' };
-		case 'l':
-			return { type: 'loop' };
 		case 'r':
 			return { type: 'replay' };
 		default:

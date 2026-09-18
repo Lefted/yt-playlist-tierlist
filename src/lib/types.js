@@ -43,22 +43,13 @@
  */
 
 /**
- * Which keys the Rate page listens to.
- *
- * `letters` is the original mapping (`s a b c d f`); `digits` moves the tiers to
- * `1`–`6` so YouTube habits like `f` for fullscreen cannot rate a video by
- * accident; `off` takes the page off the keyboard entirely.
- *
- * @typedef {'letters'|'digits'|'off'} ShortcutMode
- */
-
-/**
  * @typedef {Object} Settings
  * @property {string} apiKey
  * @property {boolean} skipRated
  * @property {boolean} autoAdvance
  * @property {boolean} fullscreenOnPlay
- * @property {ShortcutMode} shortcuts
+ * @property {boolean} shortcuts - Whether the rating keys are on; the player keys
+ *   are proxied either way.
  * @property {boolean} loop
  */
 
@@ -76,20 +67,6 @@ export const RATING_ORDER = ['S', 'A', 'B', 'C', 'D', 'F'];
  */
 export function isRating(value) {
 	return typeof value === 'string' && RATING_ORDER.includes(/** @type {Rating} */ (value));
-}
-
-/** @type {ShortcutMode[]} In the order the settings control offers them. */
-export const SHORTCUT_MODES = ['letters', 'digits', 'off'];
-
-/** @type {ShortcutMode} What a fresh install and anything unrecognised fall back to. */
-export const DEFAULT_SHORTCUT_MODE = 'letters';
-
-/**
- * @param {unknown} value
- * @returns {value is ShortcutMode}
- */
-export function isShortcutMode(value) {
-	return typeof value === 'string' && SHORTCUT_MODES.includes(/** @type {ShortcutMode} */ (value));
 }
 
 /**

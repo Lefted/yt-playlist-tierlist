@@ -251,6 +251,16 @@
 		else player?.play();
 	}
 
+	/**
+	 * `m` on YouTube, proxied: the key reaches our page, not the iframe.
+	 * @returns {void}
+	 */
+	function toggleMute() {
+		if (!player) return;
+		if (player.isMuted()) player.unMute();
+		else player.mute();
+	}
+
 	/** @returns {Promise<void>} */
 	async function requestFullscreen() {
 		if (await player?.requestFullscreen()) return;
@@ -326,14 +336,13 @@
 	function handleKeydown(event) {
 		if (!current) return;
 
-		const mode = settings.shortcuts;
-		const action = shortcutFor(event, mode);
+		const action = shortcutFor(event, settings.shortcuts);
 		if (!action) return;
 
-		// `shortcutsEnabled` is the single gate: it covers the chosen mode, a text field
-		// having the focus and an overlay being up. The exception is `?`, which has to
-		// be able to close the very list it opened.
-		if (!shortcutsEnabled(event, document, mode) && !(action.type === 'help' && helpOpen)) return;
+		// `shortcutsEnabled` is about the surroundings — a text field has the focus, or
+		// something is layered over the page. The exception is `?`, which has to be
+		// able to close the very list it opened.
+		if (!shortcutsEnabled(event, document) && !(action.type === 'help' && helpOpen)) return;
 		event.preventDefault();
 		if (fullscreen) keepOverlayUp();
 
@@ -352,6 +361,12 @@
 				break;
 			case 'playPause':
 				togglePlay();
+				break;
+			case 'muteToggle':
+				toggleMute();
+				break;
+			case 'seekBy':
+				player?.seekBy(action.seconds);
 				break;
 			case 'fullscreen':
 				requestFullscreen();
@@ -445,7 +460,7 @@
 			<div class="mx-auto flex w-full max-w-4xl flex-col gap-1.5">
 				<PlaybackControls
 					{playing}
-					mode={settings.shortcuts}
+					shortcuts={settings.shortcuts}
 					canPrevious={session.hasPrevious}
 					canNext={session.hasNext}
 					onprevious={() => session.previous()}
@@ -468,7 +483,7 @@
 
 				<TierBar
 					bind:this={tierBar}
-					mode={settings.shortcuts}
+					showKeys={settings.shortcuts}
 					rating={current.rating}
 					onrate={rate}
 					highlight={awaitingRating}

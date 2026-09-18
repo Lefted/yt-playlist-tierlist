@@ -62,39 +62,56 @@ this project without extra configuration.
 ## Keyboard shortcuts
 
 They apply on `/rate` and stand down while a dialog or popover is open or the
-focus is in a text field. _Settings → Keyboard shortcuts_ picks one of three
-modes, and the choice is remembered:
+focus is in a text field.
 
-| Mode                  | Tier keys               | Why                                                                      |
-| --------------------- | ----------------------- | ------------------------------------------------------------------------ |
-| **Letters** (default) | `S` `A` `B` `C` `D` `F` | The tier is the key.                                                     |
-| **Digits**            | `1` `2` `3` `4` `5` `6` | Leaves YouTube's `f`, `k`, `j`, `l` habits alone — `f` cannot rate an F. |
-| **Off**               | —                       | Buttons only; no key does anything on the page.                          |
+Two sets of keys meet on that page. YouTube's own player answers `k`, `m`, the
+arrows and `j`/`l` — but only while the iframe has the focus, and the Rate page
+deliberately keeps the focus on its own side so that the rating keys work in
+fullscreen. Those player keys are therefore **proxied by the app**, and they stay
+even when the rating keys are switched off, so that no key means two different
+things depending on a focus you cannot see.
 
-Everything else is the same in both key modes:
+### Player
 
-| Keys                                     | Action                                    |
-| ---------------------------------------- | ----------------------------------------- |
-| `N` or `→`                               | Next video                                |
-| `P` or `←`                               | Previous video                            |
-| `R` (`0` in letters mode)                | Replay from the start                     |
-| `Space`                                  | Play / pause (without scrolling the page) |
-| `U`, `Backspace` or `Ctrl`+`Z` (`⌘`+`Z`) | Undo the last rating                      |
-| `L`                                      | Loop the current video on / off           |
-| `Shift`+`F`                              | Fullscreen                                |
-| `?`                                      | Show the shortcut list                    |
+| Keys           | Action              |
+| -------------- | ------------------- |
+| `K` or `Space` | Play / pause        |
+| `M`            | Mute / unmute       |
+| `←` / `→`      | Back / forward 5 s  |
+| `J` / `L`      | Back / forward 10 s |
 
-In letters mode `F` stays the F tier; only `Shift`+`F` goes fullscreen, and a
-held key never rates twice. The mapping lives in
-`src/lib/components/rate/shortcuts.js` — `shortcutFor(event, mode)` for the
-bindings, `shortcutTable(mode)` and `tierKeysFor(mode)` for every hint the UI
-shows — and the tier keys come from `src/lib/tiers.js`, so the help list can
-never disagree with the bindings.
+### Rating
+
+_Settings → Keyboard shortcuts_ switches this set off (buttons only) and on; the
+choice is remembered. With it off, the tier bar drops its `<kbd>` hints and the
+help popover says so.
+
+| Keys                                     | Action                                |
+| ---------------------------------------- | ------------------------------------- |
+| `S` `A` `B` `C` `D` `F`                  | Rate the current video with that tier |
+| `N`                                      | Next video                            |
+| `P`                                      | Previous video                        |
+| `R`                                      | Replay from the start                 |
+| `U`, `Backspace` or `Ctrl`+`Z` (`⌘`+`Z`) | Undo the last rating                  |
+| `Shift`+`L`                              | Loop the current video                |
+| `Shift`+`F`                              | Fullscreen                            |
+| `?`                                      | Show the shortcut list                |
+
+`F` is the F tier, which is why fullscreen is `Shift`+`F`; `L` is the player's
+"forward 10 s", which is why loop is `Shift`+`L`. A held key repeats only where
+that helps — seeking. A rating, above all, means exactly once.
+
+The mapping lives in `src/lib/components/rate/shortcuts.js`:
+`shortcutFor(event, ratingKeys)` for the bindings, `shortcutTable(ratingKeys)`
+(grouped into _Rating_ and _Player_) and `tierKeys(ratingKeys)` for every hint the
+UI shows. The tier keys themselves come from `src/lib/tiers.js`, so the help list
+can never disagree with the bindings.
 
 **Undo** takes back the last rating (and a manual _Mark unavailable_), restores
 the previous tier and jumps back to that video, up to 50 steps back. It is also
 the button next to the playback controls and an action on the toast that follows
-a rating. The stack lives in memory and belongs to the active playlist.
+a rating — that action undoes the step its own toast is about, never a newer one.
+The stack lives in memory and belongs to the active playlist.
 
 **Fullscreen** puts the app's own player wrapper on the screen, not the YouTube
 iframe — that is what keeps the keyboard on our side of the origin boundary. A
@@ -127,10 +144,10 @@ page under you mid-video.
 
 Everything lives in your browser's `localStorage`, under two keys:
 
-| Key                | Contents                                                                           |
-| ------------------ | ---------------------------------------------------------------------------------- |
-| `ytpt:v1:library`  | Every imported playlist, its videos, their tiers and the shuffle order             |
-| `ytpt:v1:settings` | API key, _skip rated_, _auto-advance_, _fullscreen on play_, _loop_, shortcut mode |
+| Key                | Contents                                                                                  |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| `ytpt:v1:library`  | Every imported playlist, its videos, their tiers and the shuffle order                    |
+| `ytpt:v1:settings` | API key, _skip rated_, _auto-advance_, _fullscreen on play_, _loop_, _keyboard shortcuts_ |
 
 Both payloads carry a `version` field so a future format change can migrate
 instead of discarding ratings. `src/lib/storage.js` is the only module that
@@ -219,20 +236,21 @@ place; the configuration lives in `components.json`.
   the filter excludes, which is what a card's "Rate" button links to. `?tiers=S,A`
   and `?unrated=0` mirror the queue filter and stay in sync with the toolbar.
 - `src/lib/components/Player.svelte` wraps the YouTube IFrame Player API: it takes
-  a `videoId` plus callbacks and exposes `play`, `pause`, `seekTo`, `replay`,
-  `getCurrentTime`, `focus`, `requestFullscreen` and `exitFullscreen` via
-  `bind:this`. Fullscreen goes to its own wrapper (`src/lib/fullscreen.js` hides
+  a `videoId` plus callbacks and exposes `play`, `pause`, `seekTo`, `seekBy`,
+  `replay`, `mute`, `unMute`, `isMuted`, `getCurrentTime`, `focus`,
+  `requestFullscreen` and `exitFullscreen` via `bind:this` — the seek and mute
+  calls are what the proxied player keys drive. Fullscreen goes to its own wrapper (`src/lib/fullscreen.js` hides
   the prefixes and the refusals), and anything rendered into the component shows
   up inside that wrapper — which is how `components/rate/PlayerOverlay.svelte`
   gets on screen while fullscreen.
 - The Rate page's rules are pure modules next to it:
-  `components/rate/shortcuts.js` (the key mapping per mode),
+  `components/rate/shortcuts.js` (the key mapping, both layers),
   `components/rate/playback.js` (what the end of a video means, loop included)
   and `components/rate/undo.js` (how a reversible step reads).
 - Three tier controls, all driven by `src/lib/tiers.js`:
   `components/TierPicker.svelte` (compact, on a Browse card, with a clear button),
-  `components/rate/TierBar.svelte` (thumb-sized, sticky, with key hints per
-  shortcut mode) and the row inside `components/rate/PlayerOverlay.svelte`, which
+  `components/rate/TierBar.svelte` (thumb-sized, sticky, with key hints while the
+  rating keys are on) and the row inside `components/rate/PlayerOverlay.svelte`, which
   is the only one that is on screen while the player is fullscreen.
 
 The icons in `static/` are committed, so the build never needs `sharp`. Re-run

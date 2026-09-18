@@ -7,10 +7,8 @@
  */
 
 import { load, save } from '../storage.js';
-import { DEFAULT_SHORTCUT_MODE, isShortcutMode } from '../types.js';
 
 /** @typedef {import('../types.js').Settings} Settings */
-/** @typedef {import('../types.js').ShortcutMode} ShortcutMode */
 
 const STORAGE_KEY = 'settings';
 /**
@@ -26,7 +24,7 @@ const DEFAULTS = {
 	skipRated: true,
 	autoAdvance: true,
 	fullscreenOnPlay: false,
-	shortcuts: DEFAULT_SHORTCUT_MODE,
+	shortcuts: true,
 	loop: false
 };
 
@@ -35,7 +33,6 @@ class SettingsStore {
 	#skipRated = $state(DEFAULTS.skipRated);
 	#autoAdvance = $state(DEFAULTS.autoAdvance);
 	#fullscreenOnPlay = $state(DEFAULTS.fullscreenOnPlay);
-	/** @type {ShortcutMode} */
 	#shortcuts = $state(DEFAULTS.shortcuts);
 	#loop = $state(DEFAULTS.loop);
 
@@ -84,15 +81,15 @@ class SettingsStore {
 	}
 
 	/**
-	 * @returns {ShortcutMode} Which keys the Rate page answers to — `'off'` means
-	 * none at all, buttons only.
+	 * @returns {boolean} Whether the rating keys (`s a b c d f`, undo, loop, replay)
+	 * are on. The player keys the Rate page proxies stay either way.
 	 */
 	get shortcuts() {
 		return this.#shortcuts;
 	}
 
 	set shortcuts(value) {
-		this.#shortcuts = isShortcutMode(value) ? value : DEFAULT_SHORTCUT_MODE;
+		this.#shortcuts = Boolean(value);
 		this.#persist();
 	}
 
@@ -139,7 +136,7 @@ class SettingsStore {
 			typeof stored.fullscreenOnPlay === 'boolean'
 				? stored.fullscreenOnPlay
 				: DEFAULTS.fullscreenOnPlay;
-		this.#shortcuts = isShortcutMode(stored.shortcuts) ? stored.shortcuts : DEFAULTS.shortcuts;
+		this.#shortcuts = typeof stored.shortcuts === 'boolean' ? stored.shortcuts : DEFAULTS.shortcuts;
 		this.#loop = typeof stored.loop === 'boolean' ? stored.loop : DEFAULTS.loop;
 	}
 

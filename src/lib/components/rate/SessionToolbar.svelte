@@ -12,27 +12,13 @@
 
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Popover from '$lib/components/ui/popover/index.js';
-	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import { TIERS } from '$lib/tiers.js';
-	import { SHORTCUT_MODES } from '$lib/types.js';
 	import { session } from '$lib/state/session.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
 	import { cn } from '$lib/utils.js';
 	import { shortcutTable } from './shortcuts.js';
-
-	/**
-	 * How the settings popover words each shortcut mode. Which modes exist and in
-	 * what order is `SHORTCUT_MODES`' business, so a new mode cannot go unoffered.
-	 *
-	 * @type {Record<import('$lib/types.js').ShortcutMode, { label: string, hint: string }>}
-	 */
-	const SHORTCUT_WORDING = {
-		letters: { label: 'Letters', hint: 'S A B C D F' },
-		digits: { label: 'Digits', hint: '1 – 6' },
-		off: { label: 'Off', hint: 'Buttons only' }
-	};
 
 	/**
 	 * @typedef {Object} Props
@@ -48,6 +34,10 @@
 	const selectedTiers = $derived([...session.filter.tiers]);
 	const filtered = $derived(selectedTiers.length > 0 || !session.includeUnrated);
 	const shortcuts = $derived(shortcutTable(settings.shortcuts));
+	const groups = $derived([
+		{ title: 'Rating', entries: shortcuts.rating },
+		{ title: 'Player', entries: shortcuts.player }
+	]);
 </script>
 
 <div class={cn('flex flex-wrap items-center gap-1.5', className)}>
@@ -158,27 +148,17 @@
 				<Switch bind:checked={settings.loop} />
 			</label>
 
-			<fieldset class="grid gap-2 text-sm">
-				<legend class="mb-1">
+			<label class="flex items-center justify-between gap-3 text-sm">
+				<span>
 					Keyboard shortcuts
 					<span class="text-muted-foreground block text-xs">
-						On YouTube <kbd class="font-mono">F</kbd> means fullscreen — in letters mode it rates the
-						video F instead. Digits keep the two apart.
+						Off: rate with the buttons only. On: <kbd class="font-mono">s a b c d f</kbd> rate the
+						video — note that <kbd class="font-mono">f</kbd> rates instead of toggling fullscreen;
+						use <kbd class="font-mono">Shift+F</kbd> for fullscreen.
 					</span>
-				</legend>
-
-				<RadioGroup.Root bind:value={settings.shortcuts}>
-					{#each SHORTCUT_MODES as mode (mode)}
-						<label class="flex items-center gap-2">
-							<RadioGroup.Item value={mode} id="shortcuts-{mode}" />
-							<span>
-								{SHORTCUT_WORDING[mode].label}
-								<span class="text-muted-foreground text-xs">({SHORTCUT_WORDING[mode].hint})</span>
-							</span>
-						</label>
-					{/each}
-				</RadioGroup.Root>
-			</fieldset>
+				</span>
+				<Switch bind:checked={settings.shortcuts} />
+			</label>
 		</Popover.Content>
 	</Popover.Root>
 
@@ -204,27 +184,35 @@
 			<Popover.Header>
 				<Popover.Title>Keyboard shortcuts</Popover.Title>
 			</Popover.Header>
-			{#if shortcuts.length === 0}
+			{#if shortcuts.rating.length === 0}
 				<p class="text-muted-foreground text-sm">
-					Keyboard shortcuts are off. Rate with the buttons, or switch them back on under
-					<span class="text-foreground">Settings</span>.
+					The rating shortcuts are off — rate with the buttons, or switch them back on under
+					<span class="text-foreground">Settings</span>. The player keys below keep working.
 				</p>
 			{/if}
 
-			<dl class="grid gap-1.5 text-sm">
-				{#each shortcuts as shortcut (shortcut.description)}
-					<div class="flex items-center justify-between gap-3">
-						<dt class="text-muted-foreground">{shortcut.description}</dt>
-						<dd class="flex shrink-0 gap-1">
-							{#each shortcut.keys as key (key)}
-								<kbd class="bg-muted text-foreground rounded border px-1.5 py-0.5 font-mono text-xs"
-									>{key}</kbd
-								>
+			{#each groups as group (group.title)}
+				{#if group.entries.length > 0}
+					<div class="grid gap-1.5">
+						<p class="text-xs font-medium tracking-wide uppercase">{group.title}</p>
+						<dl class="grid gap-1.5 text-sm">
+							{#each group.entries as shortcut (shortcut.description)}
+								<div class="flex items-center justify-between gap-3">
+									<dt class="text-muted-foreground">{shortcut.description}</dt>
+									<dd class="flex shrink-0 gap-1">
+										{#each shortcut.keys as key (key)}
+											<kbd
+												class="bg-muted text-foreground rounded border px-1.5 py-0.5 font-mono text-xs"
+												>{key}</kbd
+											>
+										{/each}
+									</dd>
+								</div>
 							{/each}
-						</dd>
+						</dl>
 					</div>
-				{/each}
-			</dl>
+				{/if}
+			{/each}
 		</Popover.Content>
 	</Popover.Root>
 </div>

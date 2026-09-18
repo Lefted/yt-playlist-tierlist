@@ -42,6 +42,10 @@ const UNAVAILABLE_CODES = [100, 101, 150];
  * @property {() => void} pauseVideo
  * @property {(seconds: number, allowSeekAhead?: boolean) => void} seekTo
  * @property {() => number} getCurrentTime
+ * @property {() => number} getDuration - `0` until the video's metadata is there.
+ * @property {() => void} mute
+ * @property {() => void} unMute
+ * @property {() => boolean} isMuted
  * @property {() => HTMLIFrameElement|null} getIframe
  * @property {() => void} destroy
  */

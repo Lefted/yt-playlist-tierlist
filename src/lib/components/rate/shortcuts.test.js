@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
 	isTypingTarget,
-	ratingForKey,
 	shortcutFor,
 	shortcutKeys,
 	shortcutTable,
 	shortcutsEnabled,
-	tierKeysFor
+	tierKeys
 } from './shortcuts.js';
 import { RATING_ORDER } from '$lib/types.js';
 
@@ -35,71 +34,77 @@ function documentStub(match = null) {
 	return { querySelector: () => match };
 }
 
-describe('tier keys per mode', () => {
-	it('maps the tiers to their letters by default', () => {
-		expect(tierKeysFor('letters')).toEqual({ S: 's', A: 'a', B: 'b', C: 'c', D: 'd', F: 'f' });
+describe('tierKeys', () => {
+	it('is the tier letters while the rating keys are on', () => {
+		expect(tierKeys(true)).toEqual({ S: 's', A: 'a', B: 'b', C: 'c', D: 'd', F: 'f' });
+		expect(tierKeys()).toEqual(tierKeys(true));
 	});
 
-	it('maps the tiers to 1-6 in digits mode', () => {
-		expect(tierKeysFor('digits')).toEqual({ S: '1', A: '2', B: '3', C: '4', D: '5', F: '6' });
-	});
-
-	it('has no keys at all while off', () => {
-		expect(tierKeysFor('off')).toBeNull();
-	});
-
-	it('looks a key back up per mode', () => {
-		expect(ratingForKey('letters', 'c')).toBe('C');
-		expect(ratingForKey('letters', '4')).toBeNull();
-		expect(ratingForKey('digits', '4')).toBe('C');
-		expect(ratingForKey('digits', 'c')).toBeNull();
-		expect(ratingForKey('off', 'c')).toBeNull();
+	it('is nothing at all while they are off', () => {
+		expect(tierKeys(false)).toBeNull();
 	});
 });
 
-describe('shortcutFor in letters mode', () => {
+describe('the player keys, on or off', () => {
+	it.each([true, false])('answers play/pause, mute and the seeks (rating keys: %s)', (on) => {
+		expect(shortcutFor(keydown('k'), on)).toEqual({ type: 'playPause' });
+		expect(shortcutFor(keydown(' '), on)).toEqual({ type: 'playPause' });
+		expect(shortcutFor(keydown('Spacebar'), on)).toEqual({ type: 'playPause' });
+		expect(shortcutFor(keydown('m'), on)).toEqual({ type: 'muteToggle' });
+		expect(shortcutFor(keydown('ArrowRight'), on)).toEqual({ type: 'seekBy', seconds: 5 });
+		expect(shortcutFor(keydown('ArrowLeft'), on)).toEqual({ type: 'seekBy', seconds: -5 });
+		expect(shortcutFor(keydown('l'), on)).toEqual({ type: 'seekBy', seconds: 10 });
+		expect(shortcutFor(keydown('j'), on)).toEqual({ type: 'seekBy', seconds: -10 });
+	});
+
+	it('follows a held key while seeking, and only while seeking', () => {
+		expect(shortcutFor(keydown('ArrowRight', { repeat: true }))).toEqual({
+			type: 'seekBy',
+			seconds: 5
+		});
+		expect(shortcutFor(keydown('f', { repeat: true }))).toBeNull();
+		expect(shortcutFor(keydown('k', { repeat: true }))).toBeNull();
+		expect(shortcutFor(keydown('n', { repeat: true }))).toBeNull();
+	});
+
+	it('leaves the number row alone — there is no percent-seek here', () => {
+		expect(shortcutFor(keydown('0'))).toBeNull();
+		expect(shortcutFor(keydown('5'))).toBeNull();
+		expect(shortcutFor(keydown('5'), false)).toBeNull();
+	});
+});
+
+describe('shortcutFor with the rating keys on', () => {
 	it.each(RATING_ORDER)('maps %s to rating that tier', (rating) => {
-		expect(shortcutFor(keydown(rating.toLowerCase()), 'letters')).toEqual({ type: 'rate', rating });
-		expect(shortcutFor(keydown(rating), 'letters')).toEqual({ type: 'rate', rating });
+		expect(shortcutFor(keydown(rating.toLowerCase()))).toEqual({ type: 'rate', rating });
+		expect(shortcutFor(keydown(rating))).toEqual({ type: 'rate', rating });
 	});
 
-	it('defaults to letters when no mode is given', () => {
-		expect(shortcutFor(keydown('s'))).toEqual({ type: 'rate', rating: 'S' });
-	});
-
-	it('maps n and ArrowRight to next', () => {
-		expect(shortcutFor(keydown('n'))).toEqual({ type: 'next' });
-		expect(shortcutFor(keydown('ArrowRight'))).toEqual({ type: 'next' });
-	});
-
-	it('maps p and ArrowLeft to previous', () => {
-		expect(shortcutFor(keydown('p'))).toEqual({ type: 'previous' });
-		expect(shortcutFor(keydown('ArrowLeft'))).toEqual({ type: 'previous' });
-	});
-
-	it('maps r and 0 to replay', () => {
-		expect(shortcutFor(keydown('r'))).toEqual({ type: 'replay' });
-		expect(shortcutFor(keydown('0'))).toEqual({ type: 'replay' });
-	});
-
-	it('maps space to play/pause', () => {
-		expect(shortcutFor(keydown(' '))).toEqual({ type: 'playPause' });
-		expect(shortcutFor(keydown('Spacebar'))).toEqual({ type: 'playPause' });
-	});
-
-	it('maps shift+f to fullscreen while plain f still rates', () => {
-		expect(shortcutFor(keydown('F', { shiftKey: true }))).toEqual({ type: 'fullscreen' });
+	it('takes the tier keys back from the player: c and f rate', () => {
+		expect(shortcutFor(keydown('c'))).toEqual({ type: 'rate', rating: 'C' });
 		expect(shortcutFor(keydown('f'))).toEqual({ type: 'rate', rating: 'F' });
+	});
+
+	it('maps n and p to the queue; the arrows seek instead', () => {
+		expect(shortcutFor(keydown('n'))).toEqual({ type: 'next' });
+		expect(shortcutFor(keydown('p'))).toEqual({ type: 'previous' });
+		expect(shortcutFor(keydown('ArrowRight'))).toEqual({ type: 'seekBy', seconds: 5 });
+	});
+
+	it('maps r to replay', () => {
+		expect(shortcutFor(keydown('r'))).toEqual({ type: 'replay' });
+	});
+
+	it('maps shift+f to fullscreen and shift+l to loop, past the tier and seek keys', () => {
+		expect(shortcutFor(keydown('F', { shiftKey: true }))).toEqual({ type: 'fullscreen' });
+		expect(shortcutFor(keydown('L', { shiftKey: true }))).toEqual({ type: 'loop' });
+		expect(shortcutFor(keydown('f'))).toEqual({ type: 'rate', rating: 'F' });
+		expect(shortcutFor(keydown('l'))).toEqual({ type: 'seekBy', seconds: 10 });
 	});
 
 	it('maps ? to the help list', () => {
 		expect(shortcutFor(keydown('?', { shiftKey: true }))).toEqual({ type: 'help' });
 		expect(shortcutFor(keydown('?'))).toEqual({ type: 'help' });
-	});
-
-	it('maps l to the loop toggle', () => {
-		expect(shortcutFor(keydown('l'))).toEqual({ type: 'loop' });
-		expect(shortcutFor(keydown('l'), 'digits')).toEqual({ type: 'loop' });
 	});
 
 	it('maps u, Backspace and ctrl/cmd+z to undo', () => {
@@ -121,11 +126,6 @@ describe('shortcutFor in letters mode', () => {
 		expect(shortcutFor(keydown('z', { ctrlKey: true, altKey: true }))).toBeNull();
 	});
 
-	it('ignores a held key, so one f too long rates one video', () => {
-		expect(shortcutFor(keydown('f', { repeat: true }))).toBeNull();
-		expect(shortcutFor(keydown('n', { repeat: true }))).toBeNull();
-	});
-
 	it('ignores shift plus an unrelated key', () => {
 		expect(shortcutFor(keydown('S', { shiftKey: true }))).toBeNull();
 		expect(shortcutFor(keydown('N', { shiftKey: true }))).toBeNull();
@@ -139,43 +139,20 @@ describe('shortcutFor in letters mode', () => {
 	});
 });
 
-describe('shortcutFor in digits mode', () => {
-	it.each(RATING_ORDER.map((rating, index) => [String(index + 1), rating]))(
-		'rates with %s',
-		(key, rating) => {
-			expect(shortcutFor(keydown(key), 'digits')).toEqual({ type: 'rate', rating });
+describe('shortcutFor with the rating keys off', () => {
+	it('answers no rating key at all', () => {
+		for (const key of ['s', 'a', 'b', 'c', 'd', 'f', 'n', 'p', 'r', 'u', 'Backspace', '?']) {
+			expect(shortcutFor(keydown(key), false)).toBeNull();
 		}
-	);
-
-	it('leaves the tier letters alone — f is the YouTube habit, not an F rating', () => {
-		for (const rating of RATING_ORDER) {
-			expect(shortcutFor(keydown(rating.toLowerCase()), 'digits')).toBeNull();
-		}
+		expect(shortcutFor(keydown('z', { ctrlKey: true }), false)).toBeNull();
+		expect(shortcutFor(keydown('F', { shiftKey: true }), false)).toBeNull();
+		expect(shortcutFor(keydown('L', { shiftKey: true }), false)).toBeNull();
 	});
 
-	it('keeps every non-tier key', () => {
-		expect(shortcutFor(keydown('n'), 'digits')).toEqual({ type: 'next' });
-		expect(shortcutFor(keydown('p'), 'digits')).toEqual({ type: 'previous' });
-		expect(shortcutFor(keydown('r'), 'digits')).toEqual({ type: 'replay' });
-		expect(shortcutFor(keydown(' '), 'digits')).toEqual({ type: 'playPause' });
-		expect(shortcutFor(keydown('u'), 'digits')).toEqual({ type: 'undo' });
-		expect(shortcutFor(keydown('l'), 'digits')).toEqual({ type: 'loop' });
-		expect(shortcutFor(keydown('?'), 'digits')).toEqual({ type: 'help' });
-		expect(shortcutFor(keydown('F', { shiftKey: true }), 'digits')).toEqual({ type: 'fullscreen' });
-	});
-
-	it('drops 0 for replay, which would read like a seventh tier', () => {
-		expect(shortcutFor(keydown('0'), 'digits')).toBeNull();
-	});
-});
-
-describe('shortcutFor while off', () => {
-	it('answers nothing at all', () => {
-		for (const key of ['s', '1', 'n', 'p', 'r', ' ', 'u', 'l', 'Backspace', '?', '0']) {
-			expect(shortcutFor(keydown(key), 'off')).toBeNull();
-		}
-		expect(shortcutFor(keydown('z', { ctrlKey: true }), 'off')).toBeNull();
-		expect(shortcutFor(keydown('F', { shiftKey: true }), 'off')).toBeNull();
+	it('still lets the player be driven', () => {
+		expect(shortcutFor(keydown('k'), false)).toEqual({ type: 'playPause' });
+		expect(shortcutFor(keydown('m'), false)).toEqual({ type: 'muteToggle' });
+		expect(shortcutFor(keydown('j'), false)).toEqual({ type: 'seekBy', seconds: -10 });
 	});
 });
 
@@ -209,15 +186,6 @@ describe('shortcutsEnabled', () => {
 		expect(shortcutsEnabled({ target: { tagName: 'BODY' } }, documentStub('dialog'))).toBe(false);
 	});
 
-	it('is false in every case while the mode is off', () => {
-		expect(shortcutsEnabled({ target: { tagName: 'BODY' } }, documentStub(), 'off')).toBe(false);
-		expect(shortcutsEnabled({ target: null }, null, 'off')).toBe(false);
-	});
-
-	it('is true in digits mode under the same conditions as in letters mode', () => {
-		expect(shortcutsEnabled({ target: { tagName: 'BODY' } }, documentStub(), 'digits')).toBe(true);
-	});
-
 	it('asks for open popover content, which carries no ARIA role', () => {
 		/** @type {string[]} */
 		const asked = [];
@@ -237,43 +205,58 @@ describe('shortcutsEnabled', () => {
 });
 
 describe('shortcutKeys', () => {
-	it('shows the tier letters in letters mode and the digits in digits mode', () => {
-		expect(shortcutKeys('letters').rate).toEqual(RATING_ORDER);
-		expect(shortcutKeys('digits').rate).toEqual(['1', '2', '3', '4', '5', '6']);
+	it('shows the tier letters while the rating keys are on', () => {
+		expect(shortcutKeys(true).rate).toEqual(RATING_ORDER);
 	});
 
-	it('drops 0 from the replay hint in digits mode', () => {
-		expect(shortcutKeys('letters').replay).toEqual(['R', '0']);
-		expect(shortcutKeys('digits').replay).toEqual(['R']);
+	it('promises the player keys either way', () => {
+		for (const on of [true, false]) {
+			expect(shortcutKeys(on).playPause).toEqual(['K', 'Space']);
+			expect(shortcutKeys(on).mute).toEqual(['M']);
+			expect(shortcutKeys(on).seekForward).toEqual(['→', 'L']);
+			expect(shortcutKeys(on).seekBack).toEqual(['←', 'J']);
+		}
 	});
 
-	it('promises no key at all while off', () => {
-		for (const keys of Object.values(shortcutKeys('off'))) expect(keys).toEqual([]);
+	it('promises no rating key while they are off', () => {
+		const keys = shortcutKeys(false);
+		for (const action of ['rate', 'next', 'previous', 'replay', 'undo', 'loop', 'fullscreen']) {
+			expect(keys[action]).toEqual([]);
+		}
+	});
+
+	it('keeps fullscreen and loop on Shift', () => {
+		expect(shortcutKeys().fullscreen).toEqual(['⇧', 'F']);
+		expect(shortcutKeys().loop).toEqual(['⇧', 'L']);
 	});
 });
 
 describe('shortcutTable', () => {
-	it('documents every tier key of the active mode', () => {
-		expect(shortcutTable('letters')[0].keys).toEqual(RATING_ORDER);
-		expect(shortcutTable('digits')[0].keys).toEqual(['1', '2', '3', '4', '5', '6']);
+	it('documents the tier keys first', () => {
+		expect(shortcutTable(true).rating[0].keys).toEqual(RATING_ORDER);
 	});
 
 	it('has a description and at least one key for every entry', () => {
-		for (const mode of /** @type {const} */ (['letters', 'digits'])) {
-			for (const entry of shortcutTable(mode)) {
+		for (const on of [true, false]) {
+			const { rating, player } = shortcutTable(on);
+			for (const entry of [...rating, ...player]) {
 				expect(entry.keys.length).toBeGreaterThan(0);
 				expect(entry.description).not.toBe('');
 			}
 		}
 	});
 
-	it('lists undo and loop', () => {
-		const descriptions = shortcutTable('letters').map((entry) => entry.description);
+	it('lists undo, loop and the player keys', () => {
+		const { rating, player } = shortcutTable(true);
+		const descriptions = [...rating, ...player].map((entry) => entry.description);
 		expect(descriptions).toContain('Undo the last rating');
 		expect(descriptions).toContain('Loop the current video');
+		expect(descriptions).toContain('Mute / unmute');
 	});
 
-	it('is empty while off, so the popover can say so instead', () => {
-		expect(shortcutTable('off')).toEqual([]);
+	it('keeps only the player group while the rating keys are off', () => {
+		const { rating, player } = shortcutTable(false);
+		expect(rating).toEqual([]);
+		expect(player.length).toBeGreaterThan(0);
 	});
 });

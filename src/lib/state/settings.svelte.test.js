@@ -32,7 +32,7 @@ describe('defaults', () => {
 			skipRated: true,
 			autoAdvance: true,
 			fullscreenOnPlay: false,
-			shortcuts: 'letters',
+			shortcuts: true,
 			loop: false
 		});
 	});
@@ -50,7 +50,7 @@ describe('persistence', () => {
 			skipRated: false,
 			autoAdvance: true,
 			fullscreenOnPlay: false,
-			shortcuts: 'letters',
+			shortcuts: true,
 			loop: false
 		});
 	});
@@ -63,7 +63,7 @@ describe('persistence', () => {
 				skipRated: false,
 				autoAdvance: false,
 				fullscreenOnPlay: true,
-				shortcuts: 'digits',
+				shortcuts: false,
 				loop: true
 			})
 		});
@@ -73,7 +73,7 @@ describe('persistence', () => {
 			skipRated: false,
 			autoAdvance: false,
 			fullscreenOnPlay: true,
-			shortcuts: 'digits',
+			shortcuts: false,
 			loop: true
 		});
 	});
@@ -122,26 +122,21 @@ describe('loop', () => {
 	});
 });
 
-describe('shortcut mode', () => {
-	it('starts on the letter keys', async () => {
+describe('shortcuts', () => {
+	it('starts on', async () => {
 		const { settings } = await boot();
-		expect(settings.shortcuts).toBe('letters');
+		expect(settings.shortcuts).toBe(true);
 	});
 
-	it('takes the three modes and persists them', async () => {
+	it('persists being switched off', async () => {
 		const { settings } = await boot();
-		for (const mode of ['digits', 'off', 'letters']) {
-			settings.shortcuts = /** @type {any} */ (mode);
-			expect(settings.shortcuts).toBe(mode);
-			expect(JSON.parse(/** @type {string} */ (store.entries.get(KEY))).shortcuts).toBe(mode);
-		}
+		settings.shortcuts = false;
+		expect(JSON.parse(/** @type {string} */ (store.entries.get(KEY))).shortcuts).toBe(false);
 	});
 
-	it('falls back to letters for anything else, stored or assigned', async () => {
-		const { settings } = await boot({ [KEY]: JSON.stringify({ shortcuts: 'emoji' }) });
-		expect(settings.shortcuts).toBe('letters');
-
-		settings.shortcuts = /** @type {any} */ (null);
-		expect(settings.shortcuts).toBe('letters');
+	it('falls back to on for anything that is not a boolean', async () => {
+		// An older install stored the short-lived mode enum here.
+		const { settings } = await boot({ [KEY]: JSON.stringify({ shortcuts: 'letters' }) });
+		expect(settings.shortcuts).toBe(true);
 	});
 });

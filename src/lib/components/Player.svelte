@@ -227,6 +227,36 @@
 		player.playVideo();
 	}
 
+	/**
+	 * Jump forwards or backwards from where playback is now — what `←`/`→` and
+	 * `j`/`l` do on YouTube, proxied because the keys reach our page, not the
+	 * iframe (issue #11).
+	 *
+	 * @param {number} seconds - Negative seeks backwards. Clamped to the video.
+	 * @returns {void}
+	 */
+	export function seekBy(seconds) {
+		if (!player) return;
+		const target = player.getCurrentTime() + seconds;
+		const duration = player.getDuration();
+		player.seekTo(Math.max(0, duration > 0 ? Math.min(target, duration) : target), true);
+	}
+
+	/** @returns {void} */
+	export function mute() {
+		player?.mute();
+	}
+
+	/** @returns {void} */
+	export function unMute() {
+		player?.unMute();
+	}
+
+	/** @returns {boolean} `false` while there is no player to ask. */
+	export function isMuted() {
+		return Boolean(player?.isMuted());
+	}
+
 	/** @returns {number} Playback position in seconds, `0` while there is no player. */
 	export function getCurrentTime() {
 		return player?.getCurrentTime() ?? 0;

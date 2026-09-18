@@ -10,30 +10,23 @@
 	 * `$lib/tiers.js` and share `TIER_BUTTON_BASE`.
 	 */
 	import { TIERS, TIER_BUTTON_BASE } from '$lib/tiers.js';
-	import { DEFAULT_SHORTCUT_MODE } from '$lib/types.js';
 	import { cn } from '$lib/utils.js';
-	import { tierKeysFor } from './shortcuts.js';
+	import { tierKeys } from './shortcuts.js';
 
 	/**
 	 * @typedef {Object} Props
 	 * @property {import('$lib/types.js').Rating|null} rating - The current video's rating.
 	 * @property {(rating: import('$lib/types.js').Rating) => void} onrate
 	 * @property {boolean} [highlight] - Draw attention: the video ended and wants a rating.
-	 * @property {import('$lib/types.js').ShortcutMode} [mode] - Which key hints to show;
-	 *   `'off'` shows none, because there is nothing to press.
+	 * @property {boolean} [showKeys] - Whether the rating keys are on; with them off
+	 *   the hints go, because there is nothing to press.
 	 * @property {string} [class]
 	 */
 
 	/** @type {Props} */
-	let {
-		rating,
-		onrate,
-		highlight = false,
-		mode = DEFAULT_SHORTCUT_MODE,
-		class: className
-	} = $props();
+	let { rating, onrate, highlight = false, showKeys = true, class: className } = $props();
 
-	const keys = $derived(tierKeysFor(mode));
+	const keys = $derived(tierKeys(showKeys));
 
 	/** @type {HTMLDivElement|undefined} */
 	let group = $state();

@@ -17,7 +17,6 @@
 
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
-	import { DEFAULT_SHORTCUT_MODE } from '$lib/types.js';
 	import { cn } from '$lib/utils.js';
 	import { shortcutKeys } from './shortcuts.js';
 
@@ -36,15 +35,15 @@
 	 * @property {boolean} [canUndo]
 	 * @property {string} [undoLabel] - What undoing would take back, for the tooltip.
 	 * @property {() => void} onundo
-	 * @property {import('$lib/types.js').ShortcutMode} [mode] - Which keys the tooltips
-	 *   promise; `'off'` promises none.
+	 * @property {boolean} [shortcuts] - Whether the rating keys are on; with them off
+	 *   the tooltips promise no key.
 	 * @property {string} [class]
 	 */
 
 	/** @type {Props} */
 	let {
 		playing = false,
-		mode = DEFAULT_SHORTCUT_MODE,
+		shortcuts = true,
 		loop = false,
 		canPrevious = true,
 		canNext = true,
@@ -72,7 +71,7 @@
 	 * @property {boolean} [pressed] - A toggle rather than a one-off; shows its state.
 	 */
 
-	const keys = $derived(shortcutKeys(mode));
+	const keys = $derived(shortcutKeys(shortcuts));
 
 	/** @type {Control[]} */
 	const controls = $derived([
