@@ -1,0 +1,220 @@
+<script>
+	/**
+	 * The side column: which playlist is being rated, where it came from, and
+	 * everything that acts on the playlist as a whole (refresh, export, import,
+	 * remove) plus the switcher between several imported playlists.
+	 */
+	import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
+	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+	import Download from '@lucide/svelte/icons/download';
+	import Upload from '@lucide/svelte/icons/upload';
+	import Trash2 from '@lucide/svelte/icons/trash-2';
+
+	import * as AlertDialog from '$lib/components/ui/alert-dialog/index.js';
+	import * as Card from '$lib/components/ui/card/index.js';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
+	import * as Select from '$lib/components/ui/select/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+
+	import { library } from '$lib/state/library.svelte.js';
+	import { exportFileName, formatDate, playlistUrl } from './format.js';
+	import { importErrorMessage } from './errors.js';
+
+	/**
+	 * @typedef {Object} Props
+	 * @property {import('$lib/types.js').Playlist} playlist
+	 * @property {() => void} onreimport - Opens the import dialog, pre-filled with this playlist.
+	 */
+
+	/** @type {Props} */
+	let { playlist, onreimport } = $props();
+
+	/** @type {HTMLInputElement | null} */
+	let fileInput = $state(null);
+	let confirmRemove = $state(false);
+	/** @type {{ tone: 'ok' | 'error', text: string } | null} */
+	let notice = $state(null);
+
+	const url = $derived(playlistUrl(playlist.id));
+	const playlistOptions = $derived(
+		library.playlists.map((entry) => ({ value: entry.id, label: entry.title || entry.id }))
+	);
+
+	/**
+	 * Hand the export to the browser as a download. Blob + object URL rather than a
+	 * data: URL, which some browsers cap at a few megabytes — a 1000-video library
+	 * is well past that.
+	 *
+	 * @returns {void}
+	 */
+	function exportJson() {
+		const blob = new Blob([library.exportJson()], { type: 'application/json' });
+		const href = URL.createObjectURL(blob);
+		const anchor = document.createElement('a');
+		anchor.href = href;
+		anchor.download = exportFileName();
+		anchor.click();
+		URL.revokeObjectURL(href);
+		notice = { tone: 'ok', text: `Exported ${library.playlists.length} playlist(s).` };
+	}
+
+	/**
+	 * @param {Event} event
+	 * @returns {Promise<void>}
+	 */
+	async function importJson(event) {
+		const target = /** @type {HTMLInputElement} */ (event.currentTarget);
+		const file = target.files?.[0];
+		// Reset the picker so choosing the same file twice fires `change` again.
+		target.value = '';
+		if (!file) return;
+
+		try {
+			const summary = library.importJson(await file.text());
+			notice = {
+				tone: 'ok',
+				text: `Imported ${summary.videos} video(s) from ${summary.playlists} playlist(s); ${summary.ratingsApplied} rating(s) applied.`
+			};
+		} catch (cause) {
+			notice = { tone: 'error', text: importErrorMessage(cause) };
+		}
+	}
+
+	/** @returns {void} */
+	function removePlaylist() {
+		library.removePlaylist(playlist.id);
+		confirmRemove = false;
+		notice = null;
+	}
+</script>
+
+<Card.Root>
+	<Card.Header>
+		<Card.Description>Playlist</Card.Description>
+		<Card.Title class="text-lg leading-snug break-words">
+			{playlist.title || playlist.id}
+		</Card.Title>
+		<Card.Action>
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button {...props} size="icon-sm" variant="outline">
+							<EllipsisVertical class="size-4" />
+							<span class="sr-only">Playlist actions</span>
+						</Button>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="end" class="w-56">
+					<DropdownMenu.Item onSelect={onreimport}>
+						<RefreshCw class="size-4" />
+						Re-import / refresh
+					</DropdownMenu.Item>
+					<DropdownMenu.Separator />
+					<DropdownMenu.Item onSelect={exportJson}>
+						<Download class="size-4" />
+						Export JSON
+					</DropdownMenu.Item>
+					<DropdownMenu.Item onSelect={() => fileInput?.click()}>
+						<Upload class="size-4" />
+						Import JSON
+					</DropdownMenu.Item>
+					<DropdownMenu.Separator />
+					<DropdownMenu.Item variant="destructive" onSelect={() => (confirmRemove = true)}>
+						<Trash2 class="size-4" />
+						Remove playlist
+					</DropdownMenu.Item>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
+		</Card.Action>
+	</Card.Header>
+
+	<Card.Content class="grid gap-4">
+		{#if playlist.channelTitle}
+			<p class="text-muted-foreground text-sm break-words">{playlist.channelTitle}</p>
+		{/if}
+
+		<dl class="grid gap-2 text-sm">
+			<div class="flex items-center justify-between gap-4">
+				<dt class="text-muted-foreground">Imported</dt>
+				<dd>{formatDate(playlist.importedAt) || 'unknown'}</dd>
+			</div>
+			<div class="flex items-center justify-between gap-4">
+				<dt class="text-muted-foreground">Updated</dt>
+				<dd>{formatDate(playlist.updatedAt) || 'unknown'}</dd>
+			</div>
+			<div class="flex items-center justify-between gap-4">
+				<dt class="text-muted-foreground">Videos</dt>
+				<dd class="tabular-nums">{playlist.videos.length}</dd>
+			</div>
+		</dl>
+
+		{#if url}
+			<Button href={url} target="_blank" rel="noreferrer" variant="outline" class="w-full">
+				<ExternalLink class="size-4" />
+				Open in YouTube
+			</Button>
+		{/if}
+
+		{#if playlistOptions.length > 1}
+			<div class="grid gap-1.5">
+				<span class="text-muted-foreground text-xs" id="playlist-switcher-label">
+					Switch playlist
+				</span>
+				<Select.Root
+					type="single"
+					value={playlist.id}
+					onValueChange={(value) => library.setActive(value)}
+				>
+					<Select.Trigger class="w-full" aria-labelledby="playlist-switcher-label">
+						{playlist.title || playlist.id}
+					</Select.Trigger>
+					<Select.Content>
+						{#each playlistOptions as option (option.value)}
+							<Select.Item value={option.value} label={option.label}>{option.label}</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
+			</div>
+		{/if}
+
+		{#if notice}
+			<p
+				class="rounded-lg border p-3 text-xs {notice.tone === 'error'
+					? 'border-destructive/40 bg-destructive/10 text-destructive'
+					: 'text-muted-foreground bg-muted/50'}"
+				role="status"
+			>
+				{notice.text}
+			</p>
+		{/if}
+	</Card.Content>
+</Card.Root>
+
+<!-- Outside the menu: the dropdown unmounts its content on select, which would take the picker with it. -->
+<input
+	bind:this={fileInput}
+	type="file"
+	accept="application/json,.json"
+	class="hidden"
+	onchange={importJson}
+/>
+
+<AlertDialog.Root bind:open={confirmRemove}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Remove "{playlist.title || playlist.id}"?</AlertDialog.Title>
+			<AlertDialog.Description>
+				This deletes the playlist and all {playlist.videos.filter((video) => video.rating !== null)
+					.length} ratings it holds from this browser. Export a JSON backup first if you want to keep
+				them.
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action variant="destructive" onclick={removePlaylist}>
+				Remove playlist
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
