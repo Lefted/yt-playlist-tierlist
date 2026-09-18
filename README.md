@@ -161,7 +161,8 @@ place; the configuration lives in `components.json`.
 ### Domain and state
 
 - `src/lib/types.js` — the domain model (`Rating`, `Video`, `Playlist`, `Settings`) as
-  JSDoc typedefs, plus `RATING_ORDER` and `isBetterOrEqual`.
+  JSDoc typedefs, plus `RATING_ORDER`, `isRating`, `isBetterOrEqual` and
+  `normalizeRatings` (the one place an untrusted tier list is cleaned up).
 - `src/lib/tiers.js` — the single source of truth for the six tiers: order,
   labels, keyboard keys, colours and the shared tier-button chrome.
 - `src/lib/storage.js` — the only place that touches `localStorage`; every key is
