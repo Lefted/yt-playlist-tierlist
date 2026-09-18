@@ -18,15 +18,15 @@
 	 * @property {import('$lib/types.js').Rating|null} rating - The current video's rating.
 	 * @property {(rating: import('$lib/types.js').Rating) => void} onrate
 	 * @property {boolean} [highlight] - Draw attention: the video ended and wants a rating.
-	 * @property {boolean} [showKeys] - Whether the rating keys are on; with them off
-	 *   the hints go, because there is nothing to press.
+	 * @property {boolean} [shortcuts] - Whether the rating keys are on; with them off
+	 *   the key hints go, because there is nothing to press.
 	 * @property {string} [class]
 	 */
 
 	/** @type {Props} */
-	let { rating, onrate, highlight = false, showKeys = true, class: className } = $props();
+	let { rating, onrate, highlight = false, shortcuts = true, class: className } = $props();
 
-	const keys = $derived(tierKeys(showKeys));
+	const keys = $derived(tierKeys(shortcuts));
 
 	/** @type {HTMLDivElement|undefined} */
 	let group = $state();

@@ -19,6 +19,9 @@
 
 	/** @typedef {import('$lib/youtube/iframe-api.js').YouTubePlayer} YouTubePlayer */
 
+	/** How far {@link seekBy} stays clear of the end, so a seek never ends the video. */
+	const END_MARGIN_SECONDS = 0.5;
+
 	/**
 	 * @typedef {Object} Props
 	 * @property {string|null} [videoId] - `null` renders the placeholder and tears the player down.
@@ -199,14 +202,27 @@
 		onerror?.(errorReasonFor(event?.data));
 	}
 
+	/**
+	 * The player, but only once it answers commands.
+	 *
+	 * `player` is assigned as soon as the API hands the instance over, which is
+	 * before `onReady`; its methods do not exist yet at that point, and the page's
+	 * keyboard is live from the first paint.
+	 *
+	 * @returns {YouTubePlayer|null}
+	 */
+	function api() {
+		return ready ? player : null;
+	}
+
 	/** @returns {void} */
 	export function play() {
-		player?.playVideo();
+		api()?.playVideo();
 	}
 
 	/** @returns {void} */
 	export function pause() {
-		player?.pauseVideo();
+		api()?.pauseVideo();
 	}
 
 	/**
@@ -214,7 +230,7 @@
 	 * @returns {void}
 	 */
 	export function seekTo(seconds) {
-		player?.seekTo(seconds, true);
+		api()?.seekTo(seconds, true);
 	}
 
 	/**
@@ -222,9 +238,10 @@
 	 * @returns {void}
 	 */
 	export function replay() {
-		if (!player) return;
-		player.seekTo(0, true);
-		player.playVideo();
+		const instance = api();
+		if (!instance) return;
+		instance.seekTo(0, true);
+		instance.playVideo();
 	}
 
 	/**
@@ -236,30 +253,35 @@
 	 * @returns {void}
 	 */
 	export function seekBy(seconds) {
-		if (!player) return;
-		const target = player.getCurrentTime() + seconds;
-		const duration = player.getDuration();
-		player.seekTo(Math.max(0, duration > 0 ? Math.min(target, duration) : target), true);
+		const instance = api();
+		if (!instance) return;
+
+		const target = instance.getCurrentTime() + seconds;
+		const duration = instance.getDuration();
+		// Short of the very end: seeking exactly there ends the video, and "forward
+		// 5 s" must not advance the session.
+		const last = duration > 0 ? duration - END_MARGIN_SECONDS : target;
+		instance.seekTo(Math.max(0, Math.min(target, last)), true);
 	}
 
 	/** @returns {void} */
 	export function mute() {
-		player?.mute();
+		api()?.mute();
 	}
 
 	/** @returns {void} */
 	export function unMute() {
-		player?.unMute();
+		api()?.unMute();
 	}
 
 	/** @returns {boolean} `false` while there is no player to ask. */
 	export function isMuted() {
-		return Boolean(player?.isMuted());
+		return Boolean(api()?.isMuted());
 	}
 
 	/** @returns {number} Playback position in seconds, `0` while there is no player. */
 	export function getCurrentTime() {
-		return player?.getCurrentTime() ?? 0;
+		return api()?.getCurrentTime() ?? 0;
 	}
 
 	/**

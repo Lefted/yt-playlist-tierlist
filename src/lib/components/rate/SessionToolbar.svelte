@@ -18,7 +18,7 @@
 	import { session } from '$lib/state/session.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
 	import { cn } from '$lib/utils.js';
-	import { shortcutTable } from './shortcuts.js';
+	import { shortcutKeys, shortcutTable } from './shortcuts.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -34,6 +34,8 @@
 	const selectedTiers = $derived([...session.filter.tiers]);
 	const filtered = $derived(selectedTiers.length > 0 || !session.includeUnrated);
 	const shortcuts = $derived(shortcutTable(settings.shortcuts));
+	/** The tier keys as the hint spells them, from the same table the bindings use. */
+	const tierHint = $derived(shortcutKeys(true).rate.join(' ').toLowerCase());
 	const groups = $derived([
 		{ title: 'Rating', entries: shortcuts.rating },
 		{ title: 'Player', entries: shortcuts.player }
@@ -152,7 +154,7 @@
 				<span>
 					Keyboard shortcuts
 					<span class="text-muted-foreground block text-xs">
-						Off: rate with the buttons only. On: <kbd class="font-mono">s a b c d f</kbd> rate the
+						Off: rate with the buttons only. On: <kbd class="font-mono">{tierHint}</kbd> rate the
 						video — note that <kbd class="font-mono">f</kbd> rates instead of toggling fullscreen;
 						use <kbd class="font-mono">Shift+F</kbd> for fullscreen.
 					</span>
@@ -187,7 +189,8 @@
 			{#if shortcuts.rating.length === 0}
 				<p class="text-muted-foreground text-sm">
 					The rating shortcuts are off — rate with the buttons, or switch them back on under
-					<span class="text-foreground">Settings</span>. The player keys below keep working.
+					<span class="text-foreground">Settings</span>. The player keys below and
+					<kbd class="font-mono">?</kbd> for this list keep working.
 				</p>
 			{/if}
 

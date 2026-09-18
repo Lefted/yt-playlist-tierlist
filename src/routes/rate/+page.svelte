@@ -470,7 +470,7 @@
 					onfullscreen={requestFullscreen}
 					canUndo={session.canUndo}
 					{undoLabel}
-					onundo={undo}
+					onundo={() => undo()}
 					loop={settings.loop}
 					onlooptoggle={toggleLoop}
 				/>
@@ -483,7 +483,7 @@
 
 				<TierBar
 					bind:this={tierBar}
-					showKeys={settings.shortcuts}
+					shortcuts={settings.shortcuts}
 					rating={current.rating}
 					onrate={rate}
 					highlight={awaitingRating}

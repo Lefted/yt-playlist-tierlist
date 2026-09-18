@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	isActivationTarget,
 	isTypingTarget,
 	shortcutFor,
 	shortcutKeys,
@@ -57,11 +58,8 @@ describe('the player keys, on or off', () => {
 		expect(shortcutFor(keydown('j'), on)).toEqual({ type: 'seekBy', seconds: -10 });
 	});
 
-	it('follows a held key while seeking, and only while seeking', () => {
-		expect(shortcutFor(keydown('ArrowRight', { repeat: true }))).toEqual({
-			type: 'seekBy',
-			seconds: 5
-		});
+	it('ignores a held key — one f too long rates one video, and seeks stay one jump', () => {
+		expect(shortcutFor(keydown('ArrowRight', { repeat: true }))).toBeNull();
 		expect(shortcutFor(keydown('f', { repeat: true }))).toBeNull();
 		expect(shortcutFor(keydown('k', { repeat: true }))).toBeNull();
 		expect(shortcutFor(keydown('n', { repeat: true }))).toBeNull();
@@ -141,7 +139,7 @@ describe('shortcutFor with the rating keys on', () => {
 
 describe('shortcutFor with the rating keys off', () => {
 	it('answers no rating key at all', () => {
-		for (const key of ['s', 'a', 'b', 'c', 'd', 'f', 'n', 'p', 'r', 'u', 'Backspace', '?']) {
+		for (const key of ['s', 'a', 'b', 'c', 'd', 'f', 'n', 'p', 'r', 'u', 'Backspace']) {
 			expect(shortcutFor(keydown(key), false)).toBeNull();
 		}
 		expect(shortcutFor(keydown('z', { ctrlKey: true }), false)).toBeNull();
@@ -153,6 +151,11 @@ describe('shortcutFor with the rating keys off', () => {
 		expect(shortcutFor(keydown('k'), false)).toEqual({ type: 'playPause' });
 		expect(shortcutFor(keydown('m'), false)).toEqual({ type: 'muteToggle' });
 		expect(shortcutFor(keydown('j'), false)).toEqual({ type: 'seekBy', seconds: -10 });
+	});
+
+	it('still opens the help list, which is how you find out what is left', () => {
+		expect(shortcutFor(keydown('?'), false)).toEqual({ type: 'help' });
+		expect(shortcutFor(keydown('?', { shiftKey: true }), false)).toEqual({ type: 'help' });
 	});
 });
 
@@ -170,6 +173,23 @@ describe('isTypingTarget', () => {
 	it('is false for ordinary elements and for nothing', () => {
 		expect(isTypingTarget(/** @type {any} */ ({ tagName: 'BUTTON' }))).toBe(false);
 		expect(isTypingTarget(null)).toBe(false);
+	});
+});
+
+describe('isActivationTarget', () => {
+	it.each(['BUTTON', 'A', 'SUMMARY'])('is true for <%s>', (tagName) => {
+		expect(isActivationTarget(/** @type {any} */ ({ tagName }))).toBe(true);
+	});
+
+	it('is true for anything that says it is a button', () => {
+		expect(
+			isActivationTarget(/** @type {any} */ ({ tagName: 'DIV', getAttribute: () => 'button' }))
+		).toBe(true);
+	});
+
+	it('is false for ordinary elements and for nothing', () => {
+		expect(isActivationTarget(/** @type {any} */ ({ tagName: 'DIV' }))).toBe(false);
+		expect(isActivationTarget(null)).toBe(false);
 	});
 });
 
@@ -199,6 +219,17 @@ describe('shortcutsEnabled', () => {
 		expect(asked[0]).toContain(':not([data-state="closed"])');
 	});
 
+	it('leaves Space to a focused button, which has no other way of being pressed', () => {
+		const button = { tagName: 'BUTTON' };
+		expect(shortcutsEnabled({ key: ' ', target: button }, documentStub())).toBe(false);
+		expect(shortcutsEnabled({ key: 'Spacebar', target: button }, documentStub())).toBe(false);
+
+		// Every other key still reaches the page from a button.
+		expect(shortcutsEnabled({ key: 'k', target: button }, documentStub())).toBe(true);
+		// And Space itself does when nothing is focused.
+		expect(shortcutsEnabled({ key: ' ', target: { tagName: 'BODY' } }, documentStub())).toBe(true);
+	});
+
 	it('survives a missing document', () => {
 		expect(shortcutsEnabled({ target: null }, null)).toBe(true);
 	});
@@ -218,11 +249,12 @@ describe('shortcutKeys', () => {
 		}
 	});
 
-	it('promises no rating key while they are off', () => {
+	it('promises no rating key while they are off, apart from the help list', () => {
 		const keys = shortcutKeys(false);
 		for (const action of ['rate', 'next', 'previous', 'replay', 'undo', 'loop', 'fullscreen']) {
 			expect(keys[action]).toEqual([]);
 		}
+		expect(keys.help).toEqual(['?']);
 	});
 
 	it('keeps fullscreen and loop on Shift', () => {
@@ -256,6 +288,8 @@ describe('shortcutTable', () => {
 
 	it('keeps only the player group while the rating keys are off', () => {
 		const { rating, player } = shortcutTable(false);
+		// `?` still works, but a Rating group holding nothing but "show this list"
+		// reads like a mistake; the popover says so in words instead.
 		expect(rating).toEqual([]);
 		expect(player.length).toBeGreaterThan(0);
 	});

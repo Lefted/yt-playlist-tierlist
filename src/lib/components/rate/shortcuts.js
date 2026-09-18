@@ -42,6 +42,9 @@ const LARGE_SEEK_SECONDS = 10;
  */
 const TYPING_TAGS = ['input', 'textarea', 'select'];
 
+/** Elements that `Space` presses; the page must leave that key to them. */
+const ACTIVATION_TAGS = ['button', 'a', 'summary'];
+
 /**
  * Anything layered over the page takes the keyboard.
  *
@@ -95,7 +98,7 @@ export function shortcutKeys(ratingKeys = true) {
 		undo: ratingKeys ? ['U', '⌫', 'Ctrl+Z'] : [],
 		loop: ratingKeys ? ['⇧', 'L'] : [],
 		fullscreen: ratingKeys ? ['⇧', 'F'] : [],
-		help: ratingKeys ? ['?'] : [],
+		help: ['?'],
 
 		// The player layer, which stays either way.
 		playPause: ['K', 'Space'],
@@ -135,7 +138,9 @@ export function shortcutTable(ratingKeys = true) {
 			[keys.undo, 'Undo the last rating'],
 			[keys.loop, 'Loop the current video'],
 			[keys.fullscreen, 'Fullscreen'],
-			[keys.help, 'Show this list']
+			// `?` works either way, but with the rating keys off this list is all
+			// that is left of the group, and a group of one reads like a mistake.
+			[ratingKeys ? keys.help : [], 'Show this list']
 		]),
 		player: table([
 			[keys.playPause, 'Play / pause'],
@@ -162,19 +167,40 @@ export function isTypingTarget(target) {
 }
 
 /**
+ * Is this element pressed with `Space`?
+ *
+ * @param {EventTarget|null} target
+ * @returns {boolean}
+ */
+export function isActivationTarget(target) {
+	const element = /** @type {any} */ (target);
+	if (!element || typeof element !== 'object') return false;
+	if (element.getAttribute?.('role') === 'button') return true;
+
+	const tag = typeof element.tagName === 'string' ? element.tagName.toLowerCase() : '';
+	return ACTIVATION_TAGS.includes(tag);
+}
+
+/**
  * Should this keydown reach the page at all?
  *
- * About the surroundings only — a text field has the focus, or something is
- * layered over the page. Which keys exist is {@link shortcutFor}'s business,
- * the user's "shortcuts off" included: that silences the rating keys but keeps
- * the player ones.
+ * About the surroundings only — a text field has the focus, a button is waiting to
+ * be pressed with `Space`, or something is layered over the page. Which keys exist
+ * is {@link shortcutFor}'s business, the user's "shortcuts off" included: that
+ * silences the rating keys but keeps the player ones.
  *
- * @param {{ target?: EventTarget|null }} event
+ * @param {{ key?: string, target?: EventTarget|null }} event
  * @param {{ querySelector?: (selector: string) => unknown }|null} [doc] - Usually `document`.
  * @returns {boolean}
  */
 export function shortcutsEnabled(event, doc) {
 	if (isTypingTarget(event?.target ?? null)) return false;
+
+	// A focused button is pressed with `Space`, and that is the only way a keyboard
+	// user has of clicking it — play/pause must not swallow it.
+	const space = event?.key === ' ' || event?.key === 'Spacebar';
+	if (space && isActivationTarget(event?.target ?? null)) return false;
+
 	return !doc?.querySelector?.(OVERLAY_SELECTOR);
 }
 
@@ -187,8 +213,8 @@ export function shortcutsEnabled(event, doc) {
  * because that is where every user's hand goes to undo; any other modifier belongs
  * to the browser or the OS and is left alone.
  *
- * A held key repeats. Seeking is the one thing that should follow a held key —
- * everything else, a rating above all, means exactly once.
+ * A held key repeats, and nothing here wants that: a rating means exactly once,
+ * and a repeated seek would fire a request per repeat. Repeats are dropped.
  *
  * @param {{ key?: string, shiftKey?: boolean, ctrlKey?: boolean, metaKey?: boolean, altKey?: boolean, repeat?: boolean }} event
  * @param {boolean} [ratingKeys] - `settings.shortcuts`.
@@ -197,9 +223,8 @@ export function shortcutsEnabled(event, doc) {
 export function shortcutFor(event, ratingKeys = true) {
 	if (!event) return null;
 
-	const action = actionFor(event, ratingKeys);
-	if (event.repeat && action?.type !== 'seekBy') return null;
-	return action;
+	if (event.repeat) return null;
+	return actionFor(event, ratingKeys);
 }
 
 /**
@@ -217,11 +242,14 @@ function actionFor(event, ratingKeys) {
 	}
 	if (event.ctrlKey || event.metaKey || event.altKey) return null;
 
+	// The help list is the one rating-layer key that survives the switch: it is how
+	// the user finds out what is still bound.
+	if (key === '?') return { type: 'help' };
+
 	if (event.shiftKey) {
 		if (!ratingKeys) return null;
 		if (lower === 'f') return { type: 'fullscreen' };
 		if (lower === 'l') return { type: 'loop' };
-		if (key === '?') return { type: 'help' };
 		return null;
 	}
 
@@ -255,12 +283,8 @@ function actionFor(event, ratingKeys) {
 
 	if (!ratingKeys) return null;
 
-	switch (key) {
-		case 'Backspace':
-			return { type: 'undo' };
-		case '?':
-			return { type: 'help' };
-	}
+	if (key === 'Backspace') return { type: 'undo' };
+
 	switch (lower) {
 		case 'n':
 			return { type: 'next' };
