@@ -73,6 +73,25 @@
 	--sidebar-ring: oklch(0.552 0.016 285.938);
 }
 
+/*
+ * Space the app shell reserves below page content for the mobile bottom tab bar
+ * (`src/lib/components/shell/BottomTabBar.svelte`): the bar's height plus the iOS
+ * home-indicator inset, and 0 from `md` up where the bar is hidden.
+ *
+ * `src/routes/+layout.svelte` already applies it as `pb-(--app-tab-bar-inset)`, so
+ * pages do not need their own bottom padding. Anything a page pins to the bottom
+ * of the viewport itself should offset by this variable.
+ */
+:root {
+	--app-tab-bar-inset: calc(4rem + env(safe-area-inset-bottom));
+}
+
+@media (width >= 48rem) {
+	:root {
+		--app-tab-bar-inset: 0px;
+	}
+}
+
 @theme inline {
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
