@@ -1,9 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { createRatingCounts, isBetterOrEqual, isRating, RATING_ORDER } from './types.js';
+import {
+	createRatingCounts,
+	isBetterOrEqual,
+	isRating,
+	normalizeRatings,
+	RATING_ORDER
+} from './types.js';
 
 describe('RATING_ORDER', () => {
 	it('runs from best to worst', () => {
 		expect(RATING_ORDER).toEqual(['S', 'A', 'B', 'C', 'D', 'F']);
+	});
+});
+
+describe('normalizeRatings', () => {
+	it('drops non-tiers, collapses duplicates and sorts best to worst', () => {
+		expect(normalizeRatings(['F', 'nope', 'S', 'F', null, 3])).toEqual(['S', 'F']);
+	});
+
+	it('is empty for an empty or all-junk list', () => {
+		expect(normalizeRatings([])).toEqual([]);
+		expect(normalizeRatings(['', 's', 'Z'])).toEqual([]);
+	});
+
+	it('takes any iterable', () => {
+		expect(normalizeRatings(new Set(['D', 'A']))).toEqual(['A', 'D']);
 	});
 });
 

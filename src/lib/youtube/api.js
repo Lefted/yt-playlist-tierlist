@@ -6,6 +6,8 @@
  * `reason` so the UI can show a real message instead of an `alert()`.
  */
 
+import { PLAYLIST_ID_PREFIX } from './urls.js';
+
 /** @typedef {import('../types.js').Video} Video */
 
 /**
@@ -105,14 +107,18 @@ const ID_CHARACTERS = /^[A-Za-z0-9_-]{2,}$/;
 
 /**
  * A bare token only counts as a playlist id when it carries one of YouTube's
- * playlist prefixes and has the length of a real id — otherwise every word a user
- * types would parse as one.
- *
+ * playlist prefixes (shared with `youtube/urls.js`, so the two cannot drift) and
+ * has the length of a real id — otherwise every word a user types would parse as
+ * one. Anything behind `list=` is trusted without the length rule.
+ */
+const BARE_PLAYLIST_ID = new RegExp(`^${PLAYLIST_ID_PREFIX}[A-Za-z0-9_-]{11,}$`);
+
+/**
  * @param {string} value
  * @returns {boolean}
  */
 function looksLikePlaylistId(value) {
-	return /^(?:PL|UU|FL|LL|RD|OL|TL|SP|PU)[A-Za-z0-9_-]{11,}$/.test(value);
+	return BARE_PLAYLIST_ID.test(value);
 }
 
 /**

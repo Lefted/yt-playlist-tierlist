@@ -11,7 +11,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import TierBadge from '$lib/components/TierBadge.svelte';
 	import { TIERS } from '$lib/tiers.js';
-	import { applyLibraryFile, takeFile } from './json-file.js';
+	import JsonFileInput from './JsonFileInput.svelte';
 	import Notice from './Notice.svelte';
 
 	/**
@@ -22,20 +22,10 @@
 	/** @type {Props} */
 	let { onimport } = $props();
 
-	/** @type {HTMLInputElement | null} */
-	let fileInput = $state(null);
+	/** @type {JsonFileInput | null} */
+	let picker = $state(null);
 	/** @type {import('./json-file.js').Notice | null} */
 	let notice = $state(null);
-
-	/**
-	 * @param {Event} event
-	 * @returns {Promise<void>}
-	 */
-	async function restore(event) {
-		const file = takeFile(event);
-		if (!file) return;
-		notice = await applyLibraryFile(file);
-	}
 </script>
 
 <div class="flex flex-1 items-center justify-center py-8">
@@ -72,17 +62,11 @@
 
 		<Card.Footer class="flex flex-wrap gap-2">
 			<Button onclick={onimport}>Import playlist</Button>
-			<Button variant="outline" onclick={() => fileInput?.click()}>
+			<Button variant="outline" onclick={() => picker?.pick()}>
 				<Upload class="size-4" />
 				Restore from JSON
 			</Button>
-			<input
-				bind:this={fileInput}
-				type="file"
-				accept="application/json,.json"
-				class="hidden"
-				onchange={restore}
-			/>
+			<JsonFileInput bind:this={picker} onresult={(result) => (notice = result)} />
 		</Card.Footer>
 	</Card.Root>
 </div>

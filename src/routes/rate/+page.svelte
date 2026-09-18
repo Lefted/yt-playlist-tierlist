@@ -19,7 +19,7 @@
 	import SessionToolbar from '$lib/components/rate/SessionToolbar.svelte';
 	import TierBar from '$lib/components/rate/TierBar.svelte';
 	import { parseRateParams, rateQuery } from '$lib/components/rate/params.js';
-	import { isTypingTarget, shortcutFor, shortcutsEnabled } from '$lib/components/rate/shortcuts.js';
+	import { shortcutFor, shortcutsEnabled } from '$lib/components/rate/shortcuts.js';
 	import { library } from '$lib/state/library.svelte.js';
 	import { session } from '$lib/state/session.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
@@ -168,13 +168,14 @@
 	 * @returns {void}
 	 */
 	function handleKeydown(event) {
-		if (!current || event.repeat || isTypingTarget(event.target)) return;
+		if (!current || event.repeat) return;
 
 		const action = shortcutFor(event);
 		if (!action) return;
 
-		// Overlays own the keyboard while they are up — except that `?` has to be able
-		// to close the very list it opened.
+		// `shortcutsEnabled` is the single gate: it covers both a text field having the
+		// focus and an overlay being up. The exception is `?`, which has to be able to
+		// close the very list it opened.
 		if (!shortcutsEnabled(event, document) && !(action.type === 'help' && helpOpen)) return;
 		event.preventDefault();
 

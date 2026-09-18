@@ -6,7 +6,7 @@
  * {@link settings} and starts fresh on reload.
  */
 
-import { isRating, RATING_ORDER } from '../types.js';
+import { normalizeRatings } from '../types.js';
 import { library } from './library.svelte.js';
 import { settings } from './settings.svelte.js';
 
@@ -111,27 +111,10 @@ class Session {
 	 * @returns {void}
 	 */
 	setFilter(filter = {}) {
-		if (filter.tiers !== undefined) {
-			const selected = [...filter.tiers].filter(isRating);
-			this.#tiers = RATING_ORDER.filter((rating) => selected.includes(rating));
-		}
+		if (filter.tiers !== undefined) this.#tiers = normalizeRatings(filter.tiers);
 		if (filter.includeUnrated !== undefined) this.#includeUnrated = Boolean(filter.includeUnrated);
 		this.#pinnedId = null;
 		this.#index = 0;
-	}
-
-	/**
-	 * Add or remove a tier from the filter.
-	 *
-	 * @param {Rating} rating
-	 * @returns {void}
-	 */
-	toggleTier(rating) {
-		if (!isRating(rating)) return;
-		const tiers = this.#tiers.includes(rating)
-			? this.#tiers.filter((tier) => tier !== rating)
-			: [...this.#tiers, rating];
-		this.setFilter({ tiers });
 	}
 
 	/**

@@ -20,7 +20,7 @@
 	import { library } from '$lib/state/library.svelte.js';
 	import { exportFileName, formatDate } from '$lib/format.js';
 	import { playlistUrl } from '$lib/youtube/urls.js';
-	import { applyLibraryFile, takeFile } from './json-file.js';
+	import JsonFileInput from './JsonFileInput.svelte';
 	import Notice from './Notice.svelte';
 
 	/**
@@ -32,8 +32,8 @@
 	/** @type {Props} */
 	let { playlist, onreimport } = $props();
 
-	/** @type {HTMLInputElement | null} */
-	let fileInput = $state(null);
+	/** @type {JsonFileInput | null} */
+	let picker = $state(null);
 	let confirmRemove = $state(false);
 	/** @type {import('./json-file.js').Notice | null} */
 	let notice = $state(null);
@@ -74,16 +74,6 @@
 		}
 	}
 
-	/**
-	 * @param {Event} event
-	 * @returns {Promise<void>}
-	 */
-	async function importJson(event) {
-		const file = takeFile(event);
-		if (!file) return;
-		notice = await applyLibraryFile(file);
-	}
-
 	/** @returns {void} */
 	function removePlaylist() {
 		library.removePlaylist(playlist.id);
@@ -120,7 +110,7 @@
 						<Download class="size-4" />
 						Export JSON
 					</DropdownMenu.Item>
-					<DropdownMenu.Item onSelect={() => fileInput?.click()}>
+					<DropdownMenu.Item onSelect={() => picker?.pick()}>
 						<Upload class="size-4" />
 						Import JSON
 					</DropdownMenu.Item>
@@ -190,13 +180,7 @@
 </Card.Root>
 
 <!-- Outside the menu: the dropdown unmounts its content on select, which would take the picker with it. -->
-<input
-	bind:this={fileInput}
-	type="file"
-	accept="application/json,.json"
-	class="hidden"
-	onchange={importJson}
-/>
+<JsonFileInput bind:this={picker} onresult={(result) => (notice = result)} />
 
 <AlertDialog.Root bind:open={confirmRemove}>
 	<AlertDialog.Content>

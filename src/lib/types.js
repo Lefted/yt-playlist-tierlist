@@ -80,6 +80,22 @@ export function isBetterOrEqual(a, b) {
 }
 
 /**
+ * The tiers of an untrusted list — anything that is not a tier dropped, duplicates
+ * collapsed, the rest in `RATING_ORDER`.
+ *
+ * Both the `?tiers=` query parameter and `session.setFilter` take a tier list from
+ * outside, and both need exactly this; sharing it keeps a hand-edited URL and a
+ * click in the filter popover from producing different queues.
+ *
+ * @param {Iterable<unknown>} values
+ * @returns {Rating[]}
+ */
+export function normalizeRatings(values) {
+	const selected = [...values].filter(isRating);
+	return RATING_ORDER.filter((rating) => selected.includes(rating));
+}
+
+/**
  * A fresh counter object with every tier at zero.
  * @returns {RatingCounts}
  */

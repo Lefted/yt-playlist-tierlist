@@ -5,7 +5,7 @@
  * mirror the queue filter so a filtered session can be bookmarked and shared.
  */
 
-import { isRating, RATING_ORDER } from '$lib/types.js';
+import { normalizeRatings } from '$lib/types.js';
 
 /** @typedef {import('$lib/types.js').Rating} Rating */
 
@@ -20,17 +20,6 @@ import { isRating, RATING_ORDER } from '$lib/types.js';
 const FALSY = ['0', 'false', 'no', 'off'];
 
 /**
- * The tiers of an untrusted list, deduplicated and in `RATING_ORDER`.
- *
- * @param {Iterable<unknown>} values
- * @returns {Rating[]}
- */
-function tiersOf(values) {
-	const selected = [...values].filter(isRating);
-	return RATING_ORDER.filter((rating) => selected.includes(rating));
-}
-
-/**
  * Read the session parameters out of a URL.
  *
  * Unknown tiers are dropped rather than rejected — a stale or hand-edited link
@@ -42,7 +31,7 @@ function tiersOf(values) {
 export function parseRateParams(searchParams) {
 	const videoId = searchParams?.get('v')?.trim() || null;
 
-	const tiers = tiersOf(
+	const tiers = normalizeRatings(
 		(searchParams?.get('tiers') ?? '').split(',').map((part) => part.trim().toUpperCase())
 	);
 
@@ -63,7 +52,7 @@ export function parseRateParams(searchParams) {
  * @returns {string} Either `''` or a string starting with `?`.
  */
 export function rateQuery(filter) {
-	const tiers = tiersOf(filter.tiers);
+	const tiers = normalizeRatings(filter.tiers);
 
 	// Built by hand rather than with URLSearchParams, which would escape the
 	// separating comma; every value here comes from a fixed, URL-safe alphabet.

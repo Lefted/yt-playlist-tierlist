@@ -12,11 +12,16 @@
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 
 /**
- * A YouTube playlist id: one of YouTube's playlist prefixes followed by id
- * characters. The prefix is what separates a real playlist from a local id such
- * as `legacy-import`.
+ * The prefixes YouTube starts a playlist id with. This is what separates a real
+ * playlist from a local id such as `legacy-import`, and `youtube/api.js` builds
+ * its own (stricter) check on the same list — one copy, so the two cannot drift.
+ *
+ * @type {string} A regex alternation, ready to interpolate.
  */
-const PLAYLIST_ID = /^(?:PL|UU|FL|LL|RD|OL|TL|SP|PU|WL)[A-Za-z0-9_-]*$/;
+export const PLAYLIST_ID_PREFIX = '(?:PL|UU|FL|LL|RD|OL|TL|SP|PU|WL)';
+
+/** A YouTube playlist id: one of the prefixes above followed by id characters. */
+const PLAYLIST_ID = new RegExp(`^${PLAYLIST_ID_PREFIX}[A-Za-z0-9_-]*$`);
 
 /**
  * @param {string} playlistId
