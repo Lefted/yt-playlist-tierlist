@@ -97,6 +97,11 @@ describe('shortcutFor in letters mode', () => {
 		expect(shortcutFor(keydown('?'))).toEqual({ type: 'help' });
 	});
 
+	it('maps l to the loop toggle', () => {
+		expect(shortcutFor(keydown('l'))).toEqual({ type: 'loop' });
+		expect(shortcutFor(keydown('l'), 'digits')).toEqual({ type: 'loop' });
+	});
+
 	it('maps u, Backspace and ctrl/cmd+z to undo', () => {
 		expect(shortcutFor(keydown('u'))).toEqual({ type: 'undo' });
 		expect(shortcutFor(keydown('Backspace'))).toEqual({ type: 'undo' });
@@ -154,6 +159,7 @@ describe('shortcutFor in digits mode', () => {
 		expect(shortcutFor(keydown('r'), 'digits')).toEqual({ type: 'replay' });
 		expect(shortcutFor(keydown(' '), 'digits')).toEqual({ type: 'playPause' });
 		expect(shortcutFor(keydown('u'), 'digits')).toEqual({ type: 'undo' });
+		expect(shortcutFor(keydown('l'), 'digits')).toEqual({ type: 'loop' });
 		expect(shortcutFor(keydown('?'), 'digits')).toEqual({ type: 'help' });
 		expect(shortcutFor(keydown('F', { shiftKey: true }), 'digits')).toEqual({ type: 'fullscreen' });
 	});
@@ -165,7 +171,7 @@ describe('shortcutFor in digits mode', () => {
 
 describe('shortcutFor while off', () => {
 	it('answers nothing at all', () => {
-		for (const key of ['s', '1', 'n', 'p', 'r', ' ', 'u', 'Backspace', '?', '0']) {
+		for (const key of ['s', '1', 'n', 'p', 'r', ' ', 'u', 'l', 'Backspace', '?', '0']) {
 			expect(shortcutFor(keydown(key), 'off')).toBeNull();
 		}
 		expect(shortcutFor(keydown('z', { ctrlKey: true }), 'off')).toBeNull();
@@ -261,10 +267,10 @@ describe('shortcutTable', () => {
 		}
 	});
 
-	it('lists undo', () => {
-		expect(shortcutTable('letters').map((entry) => entry.description)).toContain(
-			'Undo the last rating'
-		);
+	it('lists undo and loop', () => {
+		const descriptions = shortcutTable('letters').map((entry) => entry.description);
+		expect(descriptions).toContain('Undo the last rating');
+		expect(descriptions).toContain('Loop the current video');
 	});
 
 	it('is empty while off, so the popover can say so instead', () => {

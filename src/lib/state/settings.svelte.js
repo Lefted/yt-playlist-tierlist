@@ -26,7 +26,8 @@ const DEFAULTS = {
 	skipRated: true,
 	autoAdvance: true,
 	fullscreenOnPlay: false,
-	shortcuts: DEFAULT_SHORTCUT_MODE
+	shortcuts: DEFAULT_SHORTCUT_MODE,
+	loop: false
 };
 
 class SettingsStore {
@@ -36,6 +37,7 @@ class SettingsStore {
 	#fullscreenOnPlay = $state(DEFAULTS.fullscreenOnPlay);
 	/** @type {ShortcutMode} */
 	#shortcuts = $state(DEFAULTS.shortcuts);
+	#loop = $state(DEFAULTS.loop);
 
 	constructor() {
 		this.#apply(load(STORAGE_KEY, DEFAULTS));
@@ -95,6 +97,19 @@ class SettingsStore {
 	}
 
 	/**
+	 * @returns {boolean} Restart the current video when it ends instead of moving on.
+	 * A mode, not a property of one video: it applies to the next one too.
+	 */
+	get loop() {
+		return this.#loop;
+	}
+
+	set loop(value) {
+		this.#loop = Boolean(value);
+		this.#persist();
+	}
+
+	/**
 	 * Plain snapshot, e.g. for tests or exports.
 	 * @returns {Settings}
 	 */
@@ -104,7 +119,8 @@ class SettingsStore {
 			skipRated: this.#skipRated,
 			autoAdvance: this.#autoAdvance,
 			fullscreenOnPlay: this.#fullscreenOnPlay,
-			shortcuts: this.#shortcuts
+			shortcuts: this.#shortcuts,
+			loop: this.#loop
 		};
 	}
 
@@ -124,6 +140,7 @@ class SettingsStore {
 				? stored.fullscreenOnPlay
 				: DEFAULTS.fullscreenOnPlay;
 		this.#shortcuts = isShortcutMode(stored.shortcuts) ? stored.shortcuts : DEFAULTS.shortcuts;
+		this.#loop = typeof stored.loop === 'boolean' ? stored.loop : DEFAULTS.loop;
 	}
 
 	/** @returns {void} */

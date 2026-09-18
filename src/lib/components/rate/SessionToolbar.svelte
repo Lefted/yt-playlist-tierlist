@@ -142,6 +142,16 @@
 				<Switch bind:checked={settings.fullscreenOnPlay} />
 			</label>
 
+			<label class="flex items-center justify-between gap-3 text-sm">
+				<span>
+					Loop the video
+					<span class="text-muted-foreground block text-xs"
+						>Play it again at the end instead of moving on.</span
+					>
+				</span>
+				<Switch bind:checked={settings.loop} />
+			</label>
+
 			<fieldset class="grid gap-2 text-sm">
 				<legend class="mb-1">
 					Keyboard shortcuts

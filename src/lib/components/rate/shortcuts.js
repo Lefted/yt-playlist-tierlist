@@ -20,7 +20,7 @@ import { DEFAULT_SHORTCUT_MODE, RATING_ORDER } from '$lib/types.js';
 /**
  * What the user asked for.
  * @typedef {{ type: 'rate', rating: Rating }
- *   | { type: 'next' | 'previous' | 'replay' | 'playPause' | 'fullscreen' | 'undo' | 'help' }} ShortcutAction
+ *   | { type: 'next' | 'previous' | 'replay' | 'playPause' | 'fullscreen' | 'undo' | 'loop' | 'help' }} ShortcutAction
  */
 
 /**
@@ -112,6 +112,7 @@ export function shortcutKeys(mode = DEFAULT_SHORTCUT_MODE) {
 			playPause: [],
 			fullscreen: [],
 			undo: [],
+			loop: [],
 			help: []
 		};
 	}
@@ -126,6 +127,7 @@ export function shortcutKeys(mode = DEFAULT_SHORTCUT_MODE) {
 		playPause: ['Space'],
 		fullscreen: ['⇧', 'F'],
 		undo: ['U', '⌫', 'Ctrl+Z'],
+		loop: ['L'],
 		help: ['?']
 	};
 }
@@ -148,6 +150,7 @@ export function shortcutTable(mode = DEFAULT_SHORTCUT_MODE) {
 		{ keys: keys.replay, description: 'Replay from the start' },
 		{ keys: keys.playPause, description: 'Play / pause' },
 		{ keys: keys.undo, description: 'Undo the last rating' },
+		{ keys: keys.loop, description: 'Loop the current video' },
 		{ keys: keys.fullscreen, description: 'Fullscreen' },
 		{ keys: keys.help, description: 'Show this list' }
 	];
@@ -243,6 +246,8 @@ export function shortcutFor(event, mode = DEFAULT_SHORTCUT_MODE) {
 			return { type: 'previous' };
 		case 'u':
 			return { type: 'undo' };
+		case 'l':
+			return { type: 'loop' };
 		case 'r':
 			return { type: 'replay' };
 		default:

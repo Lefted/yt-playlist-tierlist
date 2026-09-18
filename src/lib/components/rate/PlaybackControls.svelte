@@ -9,6 +9,7 @@
 	import Maximize from '@lucide/svelte/icons/maximize';
 	import Pause from '@lucide/svelte/icons/pause';
 	import Play from '@lucide/svelte/icons/play';
+	import Repeat from '@lucide/svelte/icons/repeat';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import SkipBack from '@lucide/svelte/icons/skip-back';
 	import SkipForward from '@lucide/svelte/icons/skip-forward';
@@ -30,6 +31,8 @@
 	 * @property {() => void} onreplay
 	 * @property {() => void} onplaypause
 	 * @property {() => void} onfullscreen
+	 * @property {boolean} [loop] - Whether the current video restarts when it ends.
+	 * @property {() => void} onlooptoggle
 	 * @property {boolean} [canUndo]
 	 * @property {string} [undoLabel] - What undoing would take back, for the tooltip.
 	 * @property {() => void} onundo
@@ -42,6 +45,7 @@
 	let {
 		playing = false,
 		mode = DEFAULT_SHORTCUT_MODE,
+		loop = false,
 		canPrevious = true,
 		canNext = true,
 		canUndo = false,
@@ -52,6 +56,7 @@
 		onplaypause,
 		onfullscreen,
 		onundo,
+		onlooptoggle,
 		class: className
 	} = $props();
 
@@ -64,6 +69,7 @@
 	 * @property {any} icon - A `@lucide/svelte` icon component.
 	 * @property {() => void} onclick
 	 * @property {boolean} [disabled]
+	 * @property {boolean} [pressed] - A toggle rather than a one-off; shows its state.
 	 */
 
 	const keys = $derived(shortcutKeys(mode));
@@ -108,6 +114,15 @@
 			disabled: !canNext
 		},
 		{
+			id: 'loop',
+			label: 'Loop',
+			tooltip: loop ? 'Loop: on' : 'Loop: off',
+			keys: keys.loop,
+			icon: Repeat,
+			onclick: onlooptoggle,
+			pressed: loop
+		},
+		{
 			id: 'undo',
 			label: 'Undo',
 			tooltip: undoLabel,
@@ -128,10 +143,11 @@
 					{#snippet child({ props })}
 						<Button
 							{...props}
-							variant="ghost"
+							variant={control.pressed ? 'secondary' : 'ghost'}
 							size="icon-lg"
 							class="size-11 sm:size-9"
 							aria-label={control.label}
+							aria-pressed={control.pressed}
 							disabled={control.disabled}
 							onclick={control.onclick}
 						>

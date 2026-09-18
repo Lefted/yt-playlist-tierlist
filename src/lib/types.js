@@ -59,6 +59,7 @@
  * @property {boolean} autoAdvance
  * @property {boolean} fullscreenOnPlay
  * @property {ShortcutMode} shortcuts
+ * @property {boolean} loop
  */
 
 /**

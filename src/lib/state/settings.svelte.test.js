@@ -32,7 +32,8 @@ describe('defaults', () => {
 			skipRated: true,
 			autoAdvance: true,
 			fullscreenOnPlay: false,
-			shortcuts: 'letters'
+			shortcuts: 'letters',
+			loop: false
 		});
 	});
 });
@@ -49,7 +50,8 @@ describe('persistence', () => {
 			skipRated: false,
 			autoAdvance: true,
 			fullscreenOnPlay: false,
-			shortcuts: 'letters'
+			shortcuts: 'letters',
+			loop: false
 		});
 	});
 
@@ -61,7 +63,8 @@ describe('persistence', () => {
 				skipRated: false,
 				autoAdvance: false,
 				fullscreenOnPlay: true,
-				shortcuts: 'digits'
+				shortcuts: 'digits',
+				loop: true
 			})
 		});
 
@@ -70,7 +73,8 @@ describe('persistence', () => {
 			skipRated: false,
 			autoAdvance: false,
 			fullscreenOnPlay: true,
-			shortcuts: 'digits'
+			shortcuts: 'digits',
+			loop: true
 		});
 	});
 
@@ -99,6 +103,22 @@ describe('coercion', () => {
 		const { settings } = await boot();
 		settings.autoAdvance = /** @type {any} */ (0);
 		expect(settings.autoAdvance).toBe(false);
+	});
+});
+
+describe('loop', () => {
+	it('is off by default and persists once switched on', async () => {
+		const { settings } = await boot();
+		expect(settings.loop).toBe(false);
+
+		settings.loop = true;
+		expect(JSON.parse(/** @type {string} */ (store.entries.get(KEY))).loop).toBe(true);
+	});
+
+	it('coerces to a boolean', async () => {
+		const { settings } = await boot();
+		settings.loop = /** @type {any} */ ('yes');
+		expect(settings.loop).toBe(true);
 	});
 });
 

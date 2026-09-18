@@ -20,6 +20,7 @@
 	import SessionToolbar from '$lib/components/rate/SessionToolbar.svelte';
 	import TierBar from '$lib/components/rate/TierBar.svelte';
 	import { parseRateParams, rateQuery } from '$lib/components/rate/params.js';
+	import { awaitsRating, endedAction } from '$lib/components/rate/playback.js';
 	import { shortcutFor, shortcutsEnabled } from '$lib/components/rate/shortcuts.js';
 	import { describeUndo } from '$lib/components/rate/undo.js';
 	import { focusTargetFor } from '$lib/fullscreen.js';
@@ -202,6 +203,15 @@
 		});
 	}
 
+	/**
+	 * Loop is a mode, not a property of one video: it stays on for the next one too.
+	 * @returns {void}
+	 */
+	function toggleLoop() {
+		settings.loop = !settings.loop;
+		toast.info(settings.loop ? 'Looping the current video.' : 'Loop off.', { duration: 2000 });
+	}
+
 	/** @returns {void} */
 	function shuffle() {
 		if (library.shuffle()) toast.success('Shuffled the playlist.');
@@ -221,16 +231,20 @@
 
 	/** @returns {void} */
 	function handleEnded() {
-		if (!current || !settings.autoAdvance) return;
+		if (!current) return;
 		if (fullscreen) keepOverlayUp();
 
-		// An unrated video is the whole point of the session — wait for the verdict
-		// instead of moving on.
-		if (current.rating !== null) {
-			session.next();
-			return;
-		}
-		awaitingRating = true;
+		const rated = current.rating !== null;
+		const action = endedAction({ loop: settings.loop, rated, autoAdvance: settings.autoAdvance });
+
+		// An unrated video is the whole point of the session — the tier bar says so
+		// even when loop sends the video round again.
+		awaitingRating = awaitsRating({ action, rated });
+
+		if (action === 'restart') player?.replay();
+		else if (action === 'advance') session.next();
+		if (!awaitingRating) return;
+
 		// In fullscreen the tier bar is off screen; the overlay's buttons are the ones
 		// on it, and the keyboard belongs to the wrapper.
 		if (focusTargetFor(fullscreen) === 'player') player?.focus();
@@ -312,6 +326,9 @@
 				break;
 			case 'undo':
 				undo();
+				break;
+			case 'loop':
+				toggleLoop();
 				break;
 			case 'help':
 				helpOpen = !helpOpen;
@@ -407,6 +424,8 @@
 					canUndo={session.canUndo}
 					{undoLabel}
 					onundo={undo}
+					loop={settings.loop}
+					onlooptoggle={toggleLoop}
 				/>
 
 				{#if awaitingRating}
