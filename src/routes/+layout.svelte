@@ -1,5 +1,6 @@
 <script>
 	import '../app.css';
+	import { base } from '$app/paths';
 	import { ModeWatcher } from 'mode-watcher';
 	import { pwaInfo } from 'virtual:pwa-info';
 
@@ -11,18 +12,30 @@
 	let { children } = $props();
 
 	/**
-	 * The plugin emits the manifest with a build-specific href, so the link tag has
-	 * to come from `pwaInfo` rather than being hard-coded in `app.html`.
-	 * Empty during dev, where the PWA is disabled.
+	 * The manifest is emitted by vite-plugin-pwa, so its location comes from
+	 * `pwaInfo` rather than from `app.html`. `pwaInfo` is undefined during dev,
+	 * where the PWA is disabled.
+	 *
+	 * The href it reports is page-relative (SvelteKit builds with relative asset
+	 * paths), which would resolve to the wrong place on a nested route served
+	 * through the SPA fallback — so pin it to the app root.
 	 */
-	const webManifestLink = pwaInfo?.webManifest.linkTag ?? '';
+	const webManifest = pwaInfo?.webManifest;
+	const manifestHref = webManifest
+		? new URL(webManifest.href, `${location.origin}${base}/`).pathname
+		: '';
 
 	$effect(() => network.watch(window));
 </script>
 
 <svelte:head>
-	<!-- eslint-disable-next-line svelte/no-at-html-tags -- a build-time constant from vite-plugin-pwa, not user input -->
-	{@html webManifestLink}
+	{#if manifestHref}
+		<link
+			rel="manifest"
+			href={manifestHref}
+			crossorigin={webManifest?.useCredentials ? 'use-credentials' : undefined}
+		/>
+	{/if}
 </svelte:head>
 
 <ModeWatcher />
