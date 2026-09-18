@@ -386,17 +386,45 @@ describe('undo', () => {
 		expect(session.lastUndo).toBeNull();
 		expect(session.undo()).toBeNull();
 
-		// The step is gone for good, not just hidden while PL2 is active.
+		// Rating on PL2 starts a stack of its own rather than growing PL1's.
 		session.rateCurrent('B');
+		expect(session.lastUndo).toMatchObject({ videoId: 'w1' });
 		session.undo();
+
+		// Going back re-exposes PL1's step; the Rate page clears it for good when the
+		// playlist changes, which is what `clearUndo` is for.
 		library.setActive('PL1');
+		session.clearUndo();
 		expect(session.canUndo).toBe(false);
 		expect(library.playlists[0].videos[0].rating).toBe('A');
 	});
 
-	it('can be cleared', () => {
+	it('can be cleared outright', () => {
 		session.rateCurrent('A');
 		session.clearUndo();
 		expect(session.canUndo).toBe(false);
+		expect(session.undo()).toBeNull();
+	});
+
+	it('only takes back the step a caller names, when it names one', () => {
+		session.rateCurrent('A'); // v1
+		const step = session.lastUndo;
+		session.rateCurrent('B'); // v4 — the toast for v1 is still on screen
+
+		// The stale toast must not take back the newer rating.
+		expect(session.undo(step?.id)).toBeNull();
+		expect(library.activeVideos[3].rating).toBe('B');
+
+		// Once the newer step is gone, the named one is the last one again.
+		expect(session.undo()).toMatchObject({ videoId: 'v4' });
+		expect(session.undo(step?.id)).toMatchObject({ videoId: 'v1' });
+		expect(library.activeVideos[0].rating).toBeNull();
+	});
+
+	it('gives every step its own id', () => {
+		session.rateCurrent('A');
+		const first = session.lastUndo?.id;
+		session.rateCurrent('B');
+		expect(session.lastUndo?.id).not.toBe(first);
 	});
 });

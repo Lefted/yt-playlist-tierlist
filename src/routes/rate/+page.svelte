@@ -23,7 +23,6 @@
 	import { awaitsRating, endedAction } from '$lib/components/rate/playback.js';
 	import { shortcutFor, shortcutsEnabled } from '$lib/components/rate/shortcuts.js';
 	import { describeUndo } from '$lib/components/rate/undo.js';
-	import { focusTargetFor } from '$lib/fullscreen.js';
 	import { library } from '$lib/state/library.svelte.js';
 	import { session } from '$lib/state/session.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
@@ -103,6 +102,20 @@
 		replaceState(target, page.state);
 	});
 
+	/** @type {string|null} Playlist the undo stack in `session` belongs to. */
+	let undoPlaylistId = library.activePlaylistId;
+
+	/**
+	 * A rating session belongs to one playlist: switching to another one ends the
+	 * undo history, because its steps name videos the new playlist does not have.
+	 */
+	$effect(() => {
+		const active = library.activePlaylistId;
+		if (active === undoPlaylistId) return;
+		undoPlaylistId = active;
+		session.clearUndo();
+	});
+
 	/** A new video starts unjudged; drop the "it ended" highlight. */
 	$effect(() => {
 		void current?.id;
@@ -173,17 +186,34 @@
 
 		// Short-lived by design: the toast is the fastest way back from a misclick,
 		// not a log. The Undo button next to the tier bar is the lasting one.
-		toast.success(`${title} → ${rating}`, {
-			duration: 3000,
-			action: { label: 'Undo', onClick: () => undo() }
-		});
+		toast.success(`${title} → ${rating}`, { duration: 3000, action: undoAction() });
 	}
 
-	/** @returns {void} */
-	function undo() {
-		const entry = session.undo();
+	/**
+	 * The "Undo" action of a toast, bound to the step that toast is about.
+	 *
+	 * Toasts stack and outlive the next rating; without the id, the Undo of an older
+	 * toast would quietly take back the newest step instead of its own.
+	 *
+	 * @returns {{ label: string, onClick: () => void }}
+	 */
+	function undoAction() {
+		const step = session.lastUndo;
+		return { label: 'Undo', onClick: () => undo(step?.id) };
+	}
+
+	/**
+	 * @param {number} [expectedId] - See `session.undo`.
+	 * @returns {void}
+	 */
+	function undo(expectedId) {
+		const entry = session.undo(expectedId);
 		if (!entry) {
-			toast.info('There is nothing to undo.');
+			toast.info(
+				session.canUndo
+					? 'Something happened after that one — undo takes back the last step.'
+					: 'There is nothing to undo.'
+			);
 			return;
 		}
 		awaitingRating = false;
@@ -198,9 +228,7 @@
 	function markUnavailable() {
 		const flagged = session.markCurrentUnavailable();
 		if (!flagged) return;
-		toast.info(`Marked "${flagged.title}" as unavailable.`, {
-			action: { label: 'Undo', onClick: () => undo() }
-		});
+		toast.info(`Marked "${flagged.title}" as unavailable.`, { action: undoAction() });
 	}
 
 	/**
@@ -239,15 +267,19 @@
 
 		// An unrated video is the whole point of the session — the tier bar says so
 		// even when loop sends the video round again.
+		const wasAwaiting = awaitingRating;
 		awaitingRating = awaitsRating({ action, rated });
 
 		if (action === 'restart') player?.replay();
 		else if (action === 'advance') session.next();
-		if (!awaitingRating) return;
+
+		// Only when it *becomes* true: a looping video ends over and over, and taking
+		// the focus on every lap would pull it out of whatever the user is doing.
+		if (!awaitingRating || wasAwaiting) return;
 
 		// In fullscreen the tier bar is off screen; the overlay's buttons are the ones
 		// on it, and the keyboard belongs to the wrapper.
-		if (focusTargetFor(fullscreen) === 'player') player?.focus();
+		if (fullscreen) player?.focus();
 		else tierBar?.focus();
 	}
 

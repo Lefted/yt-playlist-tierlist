@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
 	enterFullscreen,
-	focusTargetFor,
 	FULLSCREEN_EVENTS,
 	fullscreenElementOf,
 	isFullscreenElement,
@@ -85,16 +84,6 @@ describe('leaveFullscreen', () => {
 			exitFullscreen: () => Promise.reject(new Error('nope'))
 		};
 		expect(await leaveFullscreen(doc)).toBe(false);
-	});
-});
-
-describe('focusTargetFor', () => {
-	it('keeps the keyboard on the player while fullscreen', () => {
-		expect(focusTargetFor(true)).toBe('player');
-	});
-
-	it('hands it to the tier bar otherwise', () => {
-		expect(focusTargetFor(false)).toBe('tierBar');
 	});
 });
 

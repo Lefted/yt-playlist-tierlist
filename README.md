@@ -229,9 +229,11 @@ place; the configuration lives in `components.json`.
   `components/rate/shortcuts.js` (the key mapping per mode),
   `components/rate/playback.js` (what the end of a video means, loop included)
   and `components/rate/undo.js` (how a reversible step reads).
-- Two tier controls, both driven by `src/lib/tiers.js`:
-  `components/TierPicker.svelte` (compact, on a Browse card, with a clear button)
-  and `components/rate/TierBar.svelte` (thumb-sized, sticky, with key hints).
+- Three tier controls, all driven by `src/lib/tiers.js`:
+  `components/TierPicker.svelte` (compact, on a Browse card, with a clear button),
+  `components/rate/TierBar.svelte` (thumb-sized, sticky, with key hints per
+  shortcut mode) and the row inside `components/rate/PlayerOverlay.svelte`, which
+  is the only one that is on screen while the player is fullscreen.
 
 The icons in `static/` are committed, so the build never needs `sharp`. Re-run
 `npm run icons` only after editing the motif in `scripts/generate-icons.mjs`.

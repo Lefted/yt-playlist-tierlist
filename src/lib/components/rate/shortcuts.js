@@ -11,7 +11,7 @@
  * binding it does not have.
  */
 
-import { TIERS } from '$lib/tiers.js';
+import { RATING_BY_KEY, TIERS } from '$lib/tiers.js';
 import { DEFAULT_SHORTCUT_MODE, RATING_ORDER } from '$lib/types.js';
 
 /** @typedef {import('$lib/types.js').Rating} Rating */
@@ -61,12 +61,10 @@ const TIER_KEYS = {
 };
 
 /** @type {Record<string, Record<string, Rating>>} The same tables, key → rating. */
-const RATINGS_BY_KEY = Object.fromEntries(
-	Object.entries(TIER_KEYS).map(([mode, keys]) => [
-		mode,
-		Object.fromEntries(Object.entries(keys).map(([rating, key]) => [key, rating]))
-	])
-);
+const RATINGS_BY_KEY = {
+	letters: RATING_BY_KEY,
+	digits: Object.fromEntries(Object.entries(TIER_KEYS.digits).map(([rating, key]) => [key, rating]))
+};
 
 /**
  * The tier keys of a mode: rating → the key that assigns it.
@@ -103,18 +101,12 @@ export function ratingForKey(mode, key) {
  */
 export function shortcutKeys(mode = DEFAULT_SHORTCUT_MODE) {
 	const tiers = tierKeysFor(mode);
+	// Off keeps the shape and empties it, so a `{#each}` over any entry renders
+	// nothing and no caller has to know which mode it is looking at.
 	if (!tiers) {
-		return {
-			rate: [],
-			next: [],
-			previous: [],
-			replay: [],
-			playPause: [],
-			fullscreen: [],
-			undo: [],
-			loop: [],
-			help: []
-		};
+		return Object.fromEntries(
+			Object.keys(shortcutKeys(DEFAULT_SHORTCUT_MODE)).map((action) => [action, []])
+		);
 	}
 
 	return {

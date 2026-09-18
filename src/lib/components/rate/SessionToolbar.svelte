@@ -16,17 +16,23 @@
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import { TIERS } from '$lib/tiers.js';
+	import { SHORTCUT_MODES } from '$lib/types.js';
 	import { session } from '$lib/state/session.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
 	import { cn } from '$lib/utils.js';
 	import { shortcutTable } from './shortcuts.js';
 
-	/** The three shortcut modes, as the settings popover words them. */
-	const SHORTCUT_CHOICES = [
-		{ value: 'letters', label: 'Letters', hint: 'S A B C D F' },
-		{ value: 'digits', label: 'Digits', hint: '1 – 6' },
-		{ value: 'off', label: 'Off', hint: 'Buttons only' }
-	];
+	/**
+	 * How the settings popover words each shortcut mode. Which modes exist and in
+	 * what order is `SHORTCUT_MODES`' business, so a new mode cannot go unoffered.
+	 *
+	 * @type {Record<import('$lib/types.js').ShortcutMode, { label: string, hint: string }>}
+	 */
+	const SHORTCUT_WORDING = {
+		letters: { label: 'Letters', hint: 'S A B C D F' },
+		digits: { label: 'Digits', hint: '1 – 6' },
+		off: { label: 'Off', hint: 'Buttons only' }
+	};
 
 	/**
 	 * @typedef {Object} Props
@@ -161,17 +167,13 @@
 					</span>
 				</legend>
 
-				<RadioGroup.Root
-					value={settings.shortcuts}
-					onValueChange={(/** @type {string} */ value) =>
-						(settings.shortcuts = /** @type {any} */ (value))}
-				>
-					{#each SHORTCUT_CHOICES as choice (choice.value)}
+				<RadioGroup.Root bind:value={settings.shortcuts}>
+					{#each SHORTCUT_MODES as mode (mode)}
 						<label class="flex items-center gap-2">
-							<RadioGroup.Item value={choice.value} id="shortcuts-{choice.value}" />
+							<RadioGroup.Item value={mode} id="shortcuts-{mode}" />
 							<span>
-								{choice.label}
-								<span class="text-muted-foreground text-xs">({choice.hint})</span>
+								{SHORTCUT_WORDING[mode].label}
+								<span class="text-muted-foreground text-xs">({SHORTCUT_WORDING[mode].hint})</span>
 							</span>
 						</label>
 					{/each}

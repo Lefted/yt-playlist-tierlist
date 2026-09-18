@@ -76,17 +76,3 @@ export async function leaveFullscreen(doc) {
 		return false;
 	}
 }
-
-/**
- * Where the keyboard should go once a video has ended without a rating.
- *
- * In fullscreen only the player's own wrapper is on screen (and only it keeps the
- * shortcuts out of the iframe); otherwise it is the tier bar, which is where the
- * next keystroke is expected to land.
- *
- * @param {boolean} fullscreen
- * @returns {'player'|'tierBar'}
- */
-export function focusTargetFor(fullscreen) {
-	return fullscreen ? 'player' : 'tierBar';
-}

@@ -34,6 +34,8 @@ import { settings } from './settings.svelte.js';
  * *was* ("Undo: Test AMV 4 → C").
  *
  * @typedef {Object} UndoEntry
+ * @property {number} id - Identifies this very step, so a toast that has been on
+ *   screen for a while cannot take back a newer one.
  * @property {'rate'|'unavailable'} kind
  * @property {string} videoId
  * @property {string} title
@@ -49,6 +51,9 @@ import { settings } from './settings.svelte.js';
  * misclick streak, shallow enough to stay a stack and not a history.
  */
 const UNDO_LIMIT = 50;
+
+/** Hands out {@link UndoEntry} ids; only their identity matters, never their value. */
+let nextUndoId = 1;
 
 class Session {
 	/** @type {Rating[]} Selected tiers; empty means "no tier filter". */
@@ -70,7 +75,7 @@ class Session {
 	/**
 	 * @type {UndoEntry[]} The stack as far as it still applies: a step recorded on
 	 * another playlist cannot be undone here, because the video it names is not in
-	 * this playlist.
+	 * this playlist. {@link clearUndo} is what actually empties it.
 	 */
 	#undoable = $derived(
 		this.#undoPlaylistId === library.activePlaylistId
@@ -278,11 +283,15 @@ class Session {
 	 * The previous value is restored unconditionally, even when the video was rated
 	 * again elsewhere in the meantime: undo is an explicit request, not a merge.
 	 *
+	 * @param {number} [expectedId] - Only undo while *this* step is still the last
+	 *   one. The toast that follows a rating stays on screen while the next rating
+	 *   happens, and its Undo must not silently take back that newer one instead.
 	 * @returns {UndoEntry|null} The step that was taken back, `null` when there was
-	 *   none.
+	 *   none — or when `expectedId` no longer names the last one.
 	 */
-	undo() {
+	undo(expectedId) {
 		if (!this.canUndo) return null;
+		if (expectedId !== undefined && this.lastUndo?.id !== expectedId) return null;
 
 		const entry = /** @type {UndoEntry} */ (this.#undoStack.pop());
 		if (entry.kind === 'unavailable' && !entry.wasUnavailable) library.markAvailable(entry.videoId);
@@ -299,8 +308,12 @@ class Session {
 	}
 
 	/**
-	 * Forget every recorded step — the stack is about the session in front of the
-	 * user, not about the library's history.
+	 * Forget every recorded step.
+	 *
+	 * The stack is about the session in front of the user: a switch to another
+	 * playlist ends it, because its entries name videos that playlist does not have.
+	 * The Rate page calls this when the active playlist changes — nothing here can
+	 * watch for that, since a read is not allowed to write.
 	 *
 	 * @returns {void}
 	 */
@@ -310,7 +323,7 @@ class Session {
 	}
 
 	/**
-	 * @param {UndoEntry} entry
+	 * @param {Omit<UndoEntry, 'id'>} entry
 	 * @returns {void}
 	 */
 	#pushUndo(entry) {
@@ -318,7 +331,7 @@ class Session {
 			this.#undoStack = [];
 			this.#undoPlaylistId = library.activePlaylistId;
 		}
-		this.#undoStack.push(entry);
+		this.#undoStack.push({ ...entry, id: nextUndoId++ });
 		if (this.#undoStack.length > UNDO_LIMIT) this.#undoStack.shift();
 	}
 
