@@ -47,7 +47,7 @@ spec:
           # on every deploy, then committed. An immutable tag is why
           # IfNotPresent is enough. The placeholder below is replaced by the
           # first real deploy. See docs/deploy/deploys.md.
-          image: localhost:5000/amv-tierlist:0000000
+          image: localhost:5000/amv-tierlist:84b8486
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
