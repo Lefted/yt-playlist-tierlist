@@ -9,9 +9,9 @@ plays, you press a key, the next one starts. Ratings persist in the browser and
 can be exported to a JSON file and restored on another device.
 
 Every page is rendered in the browser (`ssr = false`), and your ratings still live
-in `localStorage` — but the app is served by its own small Node server now, which
-owns the database the accounts and the shared library are moving into (#14). It
-installs as a PWA on desktop and phone.
+in `localStorage` — but the app is served by its own small Node server now, and
+you sign in to reach it: invite-only accounts and sessions live in Postgres, and
+the library follows in #17. It installs as a PWA on desktop and phone.
 
 ## Getting a YouTube Data API key
 
@@ -63,6 +63,7 @@ npm run icons       # re-rasterize the app icons into static/ (needs sharp)
 npm run db:generate # write a migration for the current schema.js
 npm run db:migrate  # apply pending migrations once, by hand
 npm run db:studio   # drizzle studio against DATABASE_URL
+npm run user:set-password -- <email>   # give an account a new password
 ```
 
 `npx knip` reports unreachable files and unused dependencies; it runs against
@@ -126,6 +127,7 @@ pointed at yet.
 | -------------- | ------------------------------------------------------------------------------------------------------------ |
 | `/healthz`     | `200 {"ok":true}`, without touching the database — the liveness probe                                        |
 | `/api/v1/meta` | `{ commit, buildTime, startedAt, dbSchemaVersion, binarySchemaVersion }`, 503 if the database is unreachable |
+| `/api/v1/me`   | `{ user: { id, email, displayName, role } }` for the signed-in account, 401 without a session                |
 
 `dbSchemaVersion` counts the migrations the database has recorded,
 `binarySchemaVersion` the ones this build ships: equal after a healthy deploy.
@@ -159,6 +161,75 @@ podman run --rm --network deploy_default -p 3000:3000 \
 `node:22.23-alpine`, two stages, runs as the unprivileged `node` user (uid 1000)
 and writes nothing inside the image. The two build args are what `/api/v1/meta`
 reports back as `commit` and `buildTime`; they default to `unknown`.
+
+## Accounts
+
+The deployed app is **invite-only**: there is no public sign-up form, and every
+page except the ones below needs a session.
+
+| Public                                | Everything else                                    |
+| ------------------------------------- | -------------------------------------------------- |
+| `/login`, `/invite/<token>`           | redirected to `/login?redirectTo=…` for a page,    |
+| `/healthz`, `/api/v1/meta`            | answered with `401` JSON for anything under `/api` |
+| the client bundle and `static/` files |                                                    |
+
+### The first admin
+
+On boot, if the `users` table is **empty** and `ADMIN_EMAIL` / `ADMIN_PASSWORD`
+are both set, the server creates that admin and says so once
+(`[boot] created the first admin account: …`). From the second boot on the two
+variables are ignored — they cannot resurrect a password that has since been
+changed, and they cannot re-enable a disabled account. Set them in the Secret
+for the first rollout and leave them there; they are inert afterwards.
+
+```bash
+DATABASE_URL=… ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='at least ten chars' node build
+```
+
+### Inviting someone
+
+`/admin` (admins only) mints an invite link, valid for 7 days by default. The
+link carries a 256-bit token; the database keeps only its SHA-256, so **the page
+shows it exactly once** — copy it before reloading. A link with an email address
+on it pins the sign-up to that address; one without lets the recipient choose.
+Open invites can be revoked; used ones stay in the list as a record of who joined.
+
+`/admin` also disables and re-enables accounts. Disabling deletes that user's
+sessions, so it takes effect on their very next request rather than in thirty
+days; their library is kept, and enabling them again restores everything. The
+last admin who can still sign in cannot be disabled.
+
+### Passwords and sessions
+
+Passwords are hashed with **Argon2id** (`@node-rs/argon2`, m=19456 KiB, t=2, p=1
+— the library's defaults, recorded in each hash). The only rule is a minimum of
+10 characters. A failed login always says "That email or password is wrong",
+whether the address exists, the password is wrong or the account is disabled, and
+takes the same time in all three cases. Logins are rate-limited to 10 attempts
+per 15 minutes per address and per client address, in memory — a brake on
+guessing, not a security boundary (see `src/lib/server/auth/rate-limit.js`).
+
+The session cookie is `amv_session`: `HttpOnly`, `SameSite=Lax`, `Path=/`,
+`Secure` under `NODE_ENV=production`, 30 days, slid forward once a day of use.
+It carries a random token; `sessions.id` is its SHA-256, so a database dump
+cannot be replayed as a login.
+
+### Resetting a password
+
+There is no reset by email (out of scope for #16). The script below prompts twice,
+without echoing, writes a new Argon2id hash and signs that account out everywhere:
+
+```bash
+npm run user:set-password -- someone@example.com
+```
+
+It runs from a checkout, against whatever `DATABASE_URL` points at — the image
+carries only `build/`, so for the deployed copy, tunnel to the database first:
+
+```bash
+kubectl -n amv port-forward svc/amv-db 55432:5432 &
+DATABASE_URL=postgres://amv:…@localhost:55432/amv npm run user:set-password -- someone@example.com
+```
 
 ## Keyboard shortcuts
 
@@ -268,8 +339,8 @@ page under you mid-video.
 
 ## Your data
 
-Everything still lives in your browser's `localStorage`, under two keys — the
-server has a database, but nothing of yours is in it yet (that is #17):
+Your library still lives in your browser's `localStorage`, under two keys. The
+server's database holds your account and your sessions; the ratings follow in #17:
 
 | Key                | Contents                                                                                                               |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
@@ -415,12 +486,28 @@ side.
 - `src/lib/server/db/schema.js` — the Drizzle tables; `db/index.js` — the lazily
   opened postgres.js pool and Drizzle handle; `db/migrations.js` — applying the
   `drizzle/` folder under an advisory lock and counting what shipped versus what
-  landed.
+  landed; `db/testing.js` — the advisory lock the `*.db.test.js` suites queue on so
+  two of them never wipe one database at the same time.
 - `src/lib/server/http.js` — `json` / `jsonError`, the one response shape the API
-  uses; `src/lib/server/meta.js` — the `/api/v1/meta` payload and this process'
+  uses, and `jsonMutationGuard`, the cross-site check every JSON mutation passes
+  through; `src/lib/server/meta.js` — the `/api/v1/meta` payload and this process'
   start time.
-- `src/routes/healthz/+server.js` (no database) and
-  `src/routes/api/v1/meta/+server.js` (needs one, 503 without it).
+- `src/lib/server/auth/` — accounts, one module per noun: `password.js` (Argon2id,
+  and the decoy hash that makes an unknown address cost the same as a wrong
+  password), `tokens.js` (32 random bytes out, a SHA-256 into the database),
+  `sessions.js` (the `amv_session` cookie, the sliding expiry, `startSession` /
+  `endSession`), `invites.js`, `users.js` (validation, the bootstrap admin,
+  `isDuplicateEmail`) and `rate-limit.js`.
+- `src/lib/auth/routes.js` is deliberately **not** server-only: `hooks.server.js`
+  and `src/routes/+layout.js` both need the same list of public paths, because with
+  `ssr = false` a navigation inside the SPA never reaches the server.
+- `src/routes/healthz/+server.js` (no database), `src/routes/api/v1/meta/+server.js`
+  (needs one, 503 without it) and `src/routes/api/v1/me/+server.js` (the signed-in
+  account).
+- `/login`, `/logout`, `/invite/[token]` and `/admin` are form-action routes: the
+  password is posted by the browser and never touched by client code, and
+  SvelteKit's own origin check is the CSRF protection. `src/lib/state/auth.svelte.js`
+  is the browser's copy of "who is signed in", filled from `/api/v1/me`.
 
 The icons in `static/` are committed, so the build never needs `sharp`. Re-run
 `npm run icons` only after editing the motif in `scripts/generate-icons.mjs`.

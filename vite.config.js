@@ -57,6 +57,19 @@ export default defineConfig({
 				cleanupOutdatedCaches: true,
 				// Every route is served by the SPA shell, so unknown navigations resolve offline too.
 				navigateFallback: '/',
+				// …except the routes whose answer depends on the session. The precached
+				// shell is one file for everybody, so serving it for `/login` would hand a
+				// signed-out visitor a cached page instead of the server's redirect, and
+				// serving it for `/invite/<token>` would swallow the token. `/api` and
+				// `/healthz` are not navigations at all, but a client-side route change to
+				// one would be, and an HTML shell is a poor answer to a JSON request.
+				navigateFallbackDenylist: [
+					/^\/login\b/,
+					/^\/logout\b/,
+					/^\/invite\b/,
+					/^\/api\//,
+					/^\/healthz$/
+				],
 				runtimeCaching: [
 					{
 						// YouTube thumbnails are immutable per video and dominate the Browse page.

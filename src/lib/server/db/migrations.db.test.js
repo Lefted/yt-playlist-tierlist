@@ -6,7 +6,7 @@
  * it the suite skips, so `npm test` stays a no-dependency command on any machine.
  */
 
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildMeta } from '../meta.js';
 import { createDb } from './index.js';
 import {
@@ -16,6 +16,7 @@ import {
 	MIGRATION_LOCK_KEY
 } from './migrations.js';
 import { appMeta } from './schema.js';
+import { claimTestDatabase, DB_LOCK_TIMEOUT_MS } from './testing.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -30,11 +31,19 @@ const describeDb = databaseUrl ? describe : describe.skip;
 
 describeDb('migrations against a real database', () => {
 	/** A handle of its own, so nothing here touches the process-wide pool. */
-	const { client, db } = createDb(databaseUrl ?? '', { max: 2 });
+	const { client, db } = createDb(databaseUrl ?? '', { max: 3 });
 
-	/** Puts the database back to "never migrated". */
+	/** @type {() => Promise<void>} */
+	let release;
+
+	/**
+	 * Puts the database back to "never migrated" — every object any migration
+	 * creates, not just this file's, because another `*.db.test.js` suite may have
+	 * left the later ones behind.
+	 */
 	async function reset() {
-		await client`drop table if exists app_meta cascade`;
+		await client`drop table if exists invites, sessions, users, app_meta cascade`;
+		await client`drop type if exists user_role cascade`;
 		await client`drop schema if exists drizzle cascade`;
 	}
 
@@ -43,9 +52,18 @@ describeDb('migrations against a real database', () => {
 		return applyMigrations(/** @type {string} */ (databaseUrl));
 	}
 
+	// One suite at a time: every `*.db.test.js` file wipes this database, and Vitest
+	// runs files in parallel. The generous timeout is the whole point — this hook is
+	// *meant* to wait out the other suite, and Vitest's 10s default would call that
+	// a failure.
+	beforeAll(async () => {
+		release = await claimTestDatabase(client);
+	}, DB_LOCK_TIMEOUT_MS);
+
 	beforeEach(reset);
 
 	afterAll(async () => {
+		await release();
 		await client.end();
 	});
 

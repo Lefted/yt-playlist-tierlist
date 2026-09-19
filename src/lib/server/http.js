@@ -49,3 +49,57 @@ export function jsonError(status, code, message) {
 	const body = { error: { code, message } };
 	return json(body, status);
 }
+
+/** Methods that cannot change anything, and so need no cross-site protection. */
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
+ * Refuses a JSON mutation that did not come from this app.
+ *
+ * SvelteKit's own CSRF protection covers *form* posts (it compares `Origin` for
+ * `application/x-www-form-urlencoded`, `multipart/form-data` and `text/plain` — the
+ * three content types a cross-origin `<form>` can produce). It deliberately leaves
+ * `application/json` alone, because a cross-origin `fetch` cannot send that content
+ * type without a CORS preflight the browser would then have to be told to allow.
+ *
+ * That is true, and it is one browser bug away from not being true, so the API
+ * checks for itself. Two conditions, both cheap:
+ *
+ * - **`Content-Type: application/json`.** A `<form>` can never produce it, so
+ *   insisting on it is what keeps a cross-site form post out — and every client of
+ *   this API sends JSON anyway.
+ * - **`Origin` equals `ORIGIN`**, when the server was told what it is. Browsers
+ *   attach `Origin` to every mutating request and a page cannot forge it. When
+ *   `ORIGIN` is unset (development), the header is not compared — there is nothing
+ *   to compare it against, and production requires the variable (#15).
+ *
+ * Safe methods pass untouched: `GET` changes nothing, and #17's reads should not
+ * have to carry a content type.
+ *
+ * @param {Request} request
+ * @param {string | null} allowedOrigin - `serverConfig().origin`.
+ * @returns {Response | null} A ready-to-return failure, or `null` to proceed.
+ */
+export function jsonMutationGuard(request, allowedOrigin) {
+	if (SAFE_METHODS.has(request.method)) return null;
+
+	const contentType = request.headers.get('content-type') ?? '';
+	if (!/^application\/json\s*(;|$)/i.test(contentType.trim())) {
+		return jsonError(
+			415,
+			'unsupported_media_type',
+			'This endpoint takes a JSON body; send Content-Type: application/json.'
+		);
+	}
+
+	const origin = request.headers.get('origin');
+	if (allowedOrigin && origin !== allowedOrigin) {
+		return jsonError(
+			403,
+			'cross_origin',
+			'This request did not come from the app, so it was refused.'
+		);
+	}
+
+	return null;
+}

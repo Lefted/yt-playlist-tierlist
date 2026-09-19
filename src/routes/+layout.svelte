@@ -3,13 +3,23 @@
 	import { ModeWatcher } from 'mode-watcher';
 	import { pwaInfo } from 'virtual:pwa-info';
 
+	import { page } from '$app/state';
+
 	import AppHeader from '$lib/components/shell/AppHeader.svelte';
 	import BottomTabBar from '$lib/components/shell/BottomTabBar.svelte';
 	import ReloadPrompt from '$lib/pwa/ReloadPrompt.svelte';
 	import { Toaster } from '$lib/components/ui/sonner/index.js';
+	import { isShellFreePath } from '$lib/auth/routes.js';
 	import { network } from '$lib/pwa/network.svelte.js';
 
 	let { children } = $props();
+
+	/**
+	 * `/login`, `/invite/*` and `/logout` are the pages you can reach without an
+	 * account, and the chrome around them would only offer navigation that bounces
+	 * straight back here.
+	 */
+	const shell = $derived(!isShellFreePath(page.url.pathname));
 
 	/**
 	 * The manifest is emitted by vite-plugin-pwa, so its location comes from
@@ -40,17 +50,21 @@
 <ModeWatcher />
 
 <div class="flex min-h-svh w-full flex-col">
-	<AppHeader />
+	{#if shell}
+		<AppHeader />
+	{/if}
 
 	<!--
 		`--app-tab-bar-inset` (see src/app.css) is the height of the mobile bottom tab
 		bar, and 0 from `md` up. Pages therefore never need their own bottom padding.
 	-->
-	<div class="flex flex-1 flex-col pb-(--app-tab-bar-inset)">
+	<div class="flex flex-1 flex-col {shell ? 'pb-(--app-tab-bar-inset)' : ''}">
 		{@render children()}
 	</div>
 
-	<BottomTabBar />
+	{#if shell}
+		<BottomTabBar />
+	{/if}
 	<ReloadPrompt />
 	<!-- Top, because the bottom of small screens belongs to the tab bar and the Rate page's tier bar. -->
 	<Toaster position="top-center" />

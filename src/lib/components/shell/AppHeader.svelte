@@ -1,4 +1,6 @@
 <script>
+	import { enhance } from '$app/forms';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { toggleMode } from 'mode-watcher';
@@ -7,9 +9,29 @@
 
 	import { Button } from '$lib/components/ui/button/index.js';
 	import OfflineIndicator from '$lib/pwa/OfflineIndicator.svelte';
+	import { auth } from '$lib/state/auth.svelte.js';
 	import { navItemsFor } from './nav.js';
 
 	const navItems = $derived(navItemsFor(page.url.pathname));
+
+	/**
+	 * Logging out is a form post to `/logout`, not a link: a GET that ends a session
+	 * would be triggered by any prefetch or link scanner that touched it.
+	 *
+	 * `invalidateAll` on the way out is what makes the root layout re-ask
+	 * `/api/v1/me`, so the store forgets the user rather than showing a stale name on
+	 * the login page.
+	 *
+	 * @type {import('$app/forms').SubmitFunction}
+	 */
+	const submitLogout =
+		() =>
+		async ({ result }) => {
+			// The target is the server action's own `redirect()` — already built and
+			// validated there, so there is no route literal here for `resolve()` to take.
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			if (result.type === 'redirect') await goto(result.location, { invalidateAll: true });
+		};
 </script>
 
 <header
@@ -45,6 +67,23 @@
 
 		<div class="ml-auto flex items-center gap-2">
 			<OfflineIndicator />
+
+			{#if auth.user}
+				<!-- The name is a reminder of which account this browser is, so it can go
+				     when the screen is narrow; Logout cannot. -->
+				<span class="text-muted-foreground hidden text-sm sm:inline" data-testid="current-user">
+					{auth.user.displayName}
+				</span>
+
+				{#if auth.isAdmin}
+					<Button href={resolve('/admin')} variant="ghost" size="sm">Admin</Button>
+				{/if}
+
+				<form method="POST" action={`${resolve('/logout')}`} use:enhance={submitLogout}>
+					<Button type="submit" variant="ghost" size="sm">Logout</Button>
+				</form>
+			{/if}
+
 			<Button onclick={toggleMode} variant="outline" size="icon" title="Toggle theme">
 				<Sun class="size-4 scale-100 rotate-0 transition-transform dark:scale-0 dark:-rotate-90" />
 				<Moon
