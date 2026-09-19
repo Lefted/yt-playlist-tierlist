@@ -211,6 +211,23 @@ describeDb('the library against a real database', () => {
 			expect(after.rated_at).toEqual(before.rated_at);
 		});
 
+		it('survives a playlist that lists the same video twice', async () => {
+			// YouTube allows it, and `videos (playlist_id, youtube_id)` does not — two
+			// entries would reach Postgres as one upsert touching the same row twice,
+			// which it refuses outright. `mergePlaylist` collapses them first.
+			const { playlist } = await importIt(userId, 'PL1', [
+				{ id: 'v1' },
+				{ id: 'v2' },
+				{ id: 'v1' }
+			]);
+
+			expect(playlist.videos.map((video) => video.id)).toEqual(['v1', 'v2']);
+			expect(playlist.order).toEqual(['v1', 'v2']);
+
+			const [{ count }] = await client`select count(*)::int as count from videos`;
+			expect(count).toBe(2);
+		});
+
 		it('refuses a rating the app does not have', async () => {
 			await importIt(userId, 'PL1', [{ id: 'v1' }]);
 			await expect(client`update videos set rating = 'X' where youtube_id = 'v1'`).rejects.toThrow(

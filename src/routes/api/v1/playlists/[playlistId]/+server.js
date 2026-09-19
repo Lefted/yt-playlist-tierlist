@@ -1,5 +1,6 @@
-import { apiHandler, json, jsonError } from '$lib/server/http.js';
+import { apiHandler, json } from '$lib/server/http.js';
 import { getDb } from '$lib/server/db/index.js';
+import { playlistNotFound } from '$lib/server/library/protocol.js';
 import { removePlaylist } from '$lib/server/library/service.js';
 import { requireUser } from '$lib/server/library/session.js';
 
@@ -14,8 +15,6 @@ import { requireUser } from '$lib/server/library/session.js';
  */
 export const DELETE = apiHandler(async ({ locals, params }) => {
 	const result = await removePlaylist(getDb(), requireUser(locals).id, params.playlistId);
-	if (!result.removed) {
-		return jsonError(404, 'playlist_not_found', 'You have no playlist with that id.');
-	}
+	if (!result.removed) return playlistNotFound();
 	return json({ removed: true, activePlaylistId: result.activePlaylistId });
 });

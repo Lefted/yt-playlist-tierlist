@@ -514,6 +514,9 @@ place; the configuration lives in `components.json`.
   in 60 cards at a time, and the playlist card with import/export. Its rules live in
   `src/lib/components/browse/filters.js` (bucket filter, search, sort) and its error
   copy in `errors.js`, both unit-tested; the components next to them render only.
+  `local-import.js` next to them owns the one-time migration off this device — when
+  to offer it, what to post, and the rename afterwards — and `LocalImportPrompt.svelte`
+  is the card that asks.
 - `/rate` is the rating session. `?v=<videoId>` starts it at a video — even one
   the filter excludes, which is what a card's "Rate" button links to. `?tiers=S,A`
   and `?unrated=0` mirror the queue filter and stay in sync with the toolbar.

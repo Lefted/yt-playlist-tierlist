@@ -160,12 +160,18 @@ export function orderedVideos(playlist) {
  */
 export function mergePlaylist(existing, incoming, now, { complete = true } = {}) {
 	if (!existing) {
+		// Deduplicated like the merge branch below, and for a harder reason than
+		// tidiness: a YouTube playlist may legitimately list the same video twice, and
+		// "one entry per video" is what `videos (playlist_id, youtube_id)` enforces in
+		// the database. Two entries reach it as one upsert that tries to touch the same
+		// row twice, which Postgres refuses outright.
+		const videos = dedupeById(incoming.videos);
 		return {
 			...incoming,
 			importedAt: incoming.importedAt || now,
 			updatedAt: now,
-			videos: [...incoming.videos],
-			order: reconcileOrder(incoming.order, incoming.videos)
+			videos,
+			order: reconcileOrder(incoming.order, videos)
 		};
 	}
 
@@ -215,6 +221,24 @@ export function mergePlaylist(existing, incoming, now, { complete = true } = {})
 		videos,
 		order: reconcileOrder(existing.order, videos)
 	};
+}
+
+/**
+ * The first entry per video id, in order.
+ *
+ * @param {Video[]} videos
+ * @returns {Video[]}
+ */
+function dedupeById(videos) {
+	const seen = new Set();
+	/** @type {Video[]} */
+	const result = [];
+	for (const video of videos) {
+		if (seen.has(video.id)) continue;
+		seen.add(video.id);
+		result.push(video);
+	}
+	return result;
 }
 
 /**

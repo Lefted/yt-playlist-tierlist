@@ -8,7 +8,7 @@
  * is ever wrong, instead of a `?.` that would quietly scope a query to `undefined`.
  */
 
-/** @typedef {import('$lib/server/auth/users.js').PublicUser} PublicUser */
+/** @typedef {import('../auth/users.js').PublicUser} PublicUser */
 
 /**
  * @param {App.Locals} locals

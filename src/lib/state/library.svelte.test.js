@@ -52,6 +52,22 @@ function callTo(calls, method, path) {
 	return calls.find((call) => call.method === method && call.path === path);
 }
 
+/**
+ * A handler that does not answer until it is told to — the only way to be *inside*
+ * a read while something else happens.
+ *
+ * @param {any} answer - What it eventually answers with.
+ * @returns {{ handler: () => Promise<any>, release: () => void }}
+ */
+function heldRead(answer) {
+	/** @type {() => void} */
+	let release = () => {};
+	const held = new Promise((resolve) => {
+		release = () => resolve(answer);
+	});
+	return { handler: () => held, release: () => release() };
+}
+
 beforeEach(() => {
 	notifyError.mockClear();
 });
@@ -118,6 +134,61 @@ describe('loading', () => {
 		expect(library.playlists).toEqual([]);
 		expect(library.activePlaylistId).toBeNull();
 		expect(calls).toHaveLength(before);
+	});
+
+	it('shares one read between everyone who asks while it is running', async () => {
+		vi.resetModules();
+		const { release, handler } = heldRead(libraryPayload([seedPlaylist()]));
+		const { calls } = stubApi({ 'GET /library': handler });
+		const { library } = await import('./library.svelte.js');
+
+		const first = library.ensureLoaded(USER);
+		const second = library.ensureLoaded(USER);
+		expect(library.loading).toBe(true);
+
+		release();
+		await Promise.all([first, second]);
+
+		expect(calls.filter((call) => call.path === '/library')).toHaveLength(1);
+		expect(library.playlists).toHaveLength(1);
+	});
+
+	it('throws away a read that belongs to the account that has left', async () => {
+		vi.resetModules();
+		const { release, handler } = heldRead(libraryPayload([seedPlaylist()]));
+		stubApi({ 'GET /library': handler });
+		const { library } = await import('./library.svelte.js');
+
+		const pending = library.ensureLoaded('the-one-who-left');
+		// Signing out — and, on a shared device, somebody else signing in — while that
+		// read is still on its way. Their playlists must not land in this session.
+		library.clear();
+
+		release();
+		await pending;
+
+		expect(library.playlists).toEqual([]);
+		expect(library.activePlaylistId).toBeNull();
+		expect(library.loading).toBe(false);
+	});
+
+	it('throws away a failed read that belongs to the account that has left', async () => {
+		vi.resetModules();
+		const { release, handler } = heldRead({
+			status: 503,
+			body: { error: { code: 'db_unavailable', message: 'The database is unreachable.' } }
+		});
+		stubApi({ 'GET /library': handler });
+		const { library } = await import('./library.svelte.js');
+
+		const pending = library.ensureLoaded('the-one-who-left');
+		library.clear();
+
+		release();
+		await pending;
+
+		// Their outage is not this session's error message.
+		expect(library.error).toBeNull();
 	});
 });
 

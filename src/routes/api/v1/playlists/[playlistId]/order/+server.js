@@ -1,6 +1,6 @@
 import { apiHandler, json, jsonError, readJson } from '$lib/server/http.js';
 import { getDb } from '$lib/server/db/index.js';
-import { readOrder } from '$lib/server/library/http.js';
+import { playlistNotFound, readOrder } from '$lib/server/library/protocol.js';
 import { setPlaylistOrder } from '$lib/server/library/store.js';
 import { requireUser } from '$lib/server/library/session.js';
 
@@ -20,9 +20,7 @@ export const PUT = apiHandler(async ({ locals, params, request }) => {
 	}
 
 	const stored = await setPlaylistOrder(getDb(), requireUser(locals).id, params.playlistId, order);
-	if (stored === null) {
-		return jsonError(404, 'playlist_not_found', 'You have no playlist with that id.');
-	}
+	if (stored === null) return playlistNotFound();
 
 	return json({ order: stored });
 });

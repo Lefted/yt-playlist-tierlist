@@ -68,8 +68,8 @@ export class ImportFormatError extends Error {
  *
  * @typedef {Object} AppliedImport
  * @property {Playlist[]} playlists - The whole library afterwards.
- * @property {string[]} changed - Ids of the playlists this import created or
- *   touched; the only ones a caller has to write back.
+ * @property {Playlist[]} changed - The playlists this import created or touched, as
+ *   they now are; the only ones a caller has to write back.
  * @property {ImportSummary} summary
  */
 
@@ -165,7 +165,7 @@ function applyLibraryImport(existing, incoming, now) {
 	let videos = 0;
 	let ratingsApplied = 0;
 	/** @type {string[]} */
-	const changed = [];
+	const changedIds = [];
 
 	for (const playlist of incoming) {
 		const before = playlists.find((candidate) => candidate.id === playlist.id) ?? null;
@@ -174,12 +174,12 @@ function applyLibraryImport(existing, incoming, now) {
 		// A backup is not authoritative about the playlist's contents: it may predate
 		// videos that were added since, and must not condemn them.
 		playlists = upsert(playlists, playlist, now, { complete: false });
-		if (!changed.includes(playlist.id)) changed.push(playlist.id);
+		if (!changedIds.includes(playlist.id)) changedIds.push(playlist.id);
 	}
 
 	return {
 		playlists,
-		changed,
+		changed: pick(playlists, changedIds),
 		summary: { playlists: incoming.length, videos, ratingsApplied }
 	};
 }
@@ -230,7 +230,7 @@ function applyLegacyImport(existing, incoming, now) {
 		touched.includes(playlist.id) ? { ...playlist, updatedAt: now } : playlist
 	);
 
-	const changed = [...touched];
+	const changedIds = [...touched];
 	let count = touched.length;
 	if (unmatched.length > 0) {
 		playlists = upsert(
@@ -252,16 +252,29 @@ function applyLegacyImport(existing, incoming, now) {
 			// second one says nothing about what a first one left here.
 			{ complete: false }
 		);
-		if (!changed.includes(LEGACY_PLAYLIST_ID)) changed.push(LEGACY_PLAYLIST_ID);
+		if (!changedIds.includes(LEGACY_PLAYLIST_ID)) changedIds.push(LEGACY_PLAYLIST_ID);
 		count += 1;
 		ratingsApplied += unmatched.filter((video) => video.rating !== null).length;
 	}
 
 	return {
 		playlists,
-		changed,
+		changed: pick(playlists, changedIds),
 		summary: { playlists: count, videos: incoming.length, ratingsApplied }
 	};
+}
+
+/**
+ * The named playlists, in the order they were named.
+ *
+ * @param {Playlist[]} playlists
+ * @param {string[]} ids
+ * @returns {Playlist[]}
+ */
+function pick(playlists, ids) {
+	return /** @type {Playlist[]} */ (
+		ids.map((id) => playlists.find((playlist) => playlist.id === id)).filter(Boolean)
+	);
 }
 
 /**

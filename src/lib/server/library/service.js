@@ -112,9 +112,8 @@ export async function importLibraryJson(db, userId, body, options = {}) {
 	const before = await loadLibrary(db, userId);
 	const applied = applyImport(before.playlists, parsed, now.toISOString());
 
-	for (const id of applied.changed) {
-		const playlist = applied.playlists.find((candidate) => candidate.id === id);
-		if (playlist) await savePlaylist(db, userId, playlist, now);
+	for (const playlist of applied.changed) {
+		await savePlaylist(db, userId, playlist, now);
 	}
 
 	// An import into an empty library is also a choice of what to look at.

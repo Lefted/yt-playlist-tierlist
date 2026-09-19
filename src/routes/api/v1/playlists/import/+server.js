@@ -1,6 +1,6 @@
 import { apiHandler, json, jsonError, readJson } from '$lib/server/http.js';
 import { getDb } from '$lib/server/db/index.js';
-import { importFailure, readImportInput } from '$lib/server/library/http.js';
+import { importFailure, readImportInput } from '$lib/server/library/protocol.js';
 import { importPlaylist } from '$lib/server/library/service.js';
 import { requireUser } from '$lib/server/library/session.js';
 import { YouTubeApiError } from '$lib/server/youtube.js';

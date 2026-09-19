@@ -182,6 +182,9 @@ export async function savePlaylist(db, userId, playlist, now = new Date()) {
 						durationSeconds: video.durationSeconds,
 						rating: video.rating,
 						unavailable: video.unavailable,
+						// A row that does not exist yet has no earlier moment to keep, and an
+						// export carries no rating timestamp — so `rated_at` means "when this
+						// tier arrived here", which for a restored backup is now.
 						ratedAt: video.rating === null ? null : now
 					}))
 				)

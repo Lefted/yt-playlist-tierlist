@@ -1,6 +1,6 @@
 import { apiHandler, json, jsonError, readJson } from '$lib/server/http.js';
 import { getDb } from '$lib/server/db/index.js';
-import { readVideoPatch } from '$lib/server/library/http.js';
+import { readVideoPatch } from '$lib/server/library/protocol.js';
 import { updateVideo } from '$lib/server/library/store.js';
 import { requireUser } from '$lib/server/library/session.js';
 

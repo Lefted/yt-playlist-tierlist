@@ -52,6 +52,16 @@ class Library {
 	/** @type {Promise<void>|null} The read in flight, so two callers share one. */
 	#pending = null;
 
+	/**
+	 * Bumped by every `clear()` and every read that starts.
+	 *
+	 * A read that finishes after its generation has passed is thrown away. Without
+	 * that, signing out while `GET /library` is still on its way and signing in as
+	 * somebody else on the same device lands the first account's playlists in the
+	 * second account's session — the server was never confused, but the browser was.
+	 */
+	#generation = 0;
+
 	/** @type {Playlist|null} The playlist the UI currently works on. */
 	activePlaylist = $derived(
 		this.playlists.find((playlist) => playlist.id === this.#activePlaylistId) ?? null
@@ -104,12 +114,15 @@ class Library {
 	 *   read the library still has to render.
 	 */
 	ensureLoaded(userId) {
-		if (this.#loadedFor === userId && this.error === null) return Promise.resolve();
-		if (this.#pending && this.#loadedFor === userId) return this.#pending;
+		if (this.#loadedFor === userId) {
+			// The read that is already running is the answer to this call too; the order
+			// matters, because `#loadedFor` is set before it starts.
+			if (this.#pending) return this.#pending;
+			if (this.error === null) return Promise.resolve();
+		}
 
 		this.#loadedFor = userId;
-		this.#pending = this.#load();
-		return this.#pending;
+		return this.reload();
 	}
 
 	/**
@@ -119,7 +132,7 @@ class Library {
 	 * @returns {Promise<void>}
 	 */
 	reload() {
-		this.#pending = this.#load();
+		this.#pending = this.#load(++this.#generation);
 		return this.#pending;
 	}
 
@@ -138,6 +151,8 @@ class Library {
 		this.#pending = null;
 		this.loading = false;
 		this.error = null;
+		// Whatever is still in flight was asked on behalf of somebody who has left.
+		this.#generation += 1;
 	}
 
 	/**
@@ -316,21 +331,28 @@ class Library {
 	}
 
 	/**
+	 * @param {number} generation - The value of {@link #generation} this read belongs
+	 *   to. Anything else has happened since, and this answer is about somebody else.
 	 * @returns {Promise<void>}
 	 */
-	async #load() {
+	async #load(generation) {
 		this.loading = true;
 		this.error = null;
 		try {
-			this.#apply(await apiFetch('/library'));
+			const snapshot = await apiFetch('/library');
+			if (generation !== this.#generation) return;
+			this.#apply(snapshot);
 		} catch (cause) {
+			if (generation !== this.#generation) return;
 			this.playlists = [];
 			this.#activePlaylistId = null;
 			this.error =
 				/** @type {{ message?: string }} */ (cause)?.message ?? 'Your library could not be loaded.';
 		} finally {
-			this.loading = false;
-			this.#pending = null;
+			if (generation === this.#generation) {
+				this.loading = false;
+				this.#pending = null;
+			}
 		}
 	}
 

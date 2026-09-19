@@ -13,6 +13,14 @@
 /** Everything the client calls lives under this prefix. */
 export const API_BASE = '/api/v1';
 
+/**
+ * Methods that change nothing, and so carry no content type.
+ *
+ * The same list `jsonMutationGuard` in `src/lib/server/http.js` exempts; the two
+ * sides of one rule, held together by `src/lib/api.test.js`.
+ */
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
 /** What a failed request throws. */
 export class ApiError extends Error {
 	/**
@@ -43,27 +51,31 @@ export class ApiError extends Error {
  *
  * @param {string} path - Below {@link API_BASE}, e.g. `/library`.
  * @param {{ method?: string, body?: unknown, signal?: AbortSignal }} [options] - A
- *   `body` is sent as JSON, which is also what the server's cross-site check insists
- *   on for every mutation.
+ *   `body` is sent as JSON.
  * @returns {Promise<any>} The parsed body; `null` for a 204.
  * @throws {ApiError}
  */
 export async function apiFetch(path, options = {}) {
 	const { method = 'GET', body, signal } = options;
 
+	/** @type {Record<string, string>} */
+	const headers = { accept: 'application/json' };
+	// The content type is about the *method*, not about the body: the server's
+	// cross-site check refuses any mutation that does not declare JSON, and `DELETE`
+	// has nothing to say in its body. Sending it only when there is a body is how
+	// every `DELETE` in this app came back 415.
+	if (!SAFE_METHODS.has(method.toUpperCase())) headers['content-type'] = 'application/json';
+
 	/** @type {RequestInit} */
 	const init = {
 		method,
-		headers: { accept: 'application/json' },
+		headers,
 		// The session cookie is same-origin anyway; being explicit keeps this working
 		// if the API ever moves to another host.
 		credentials: 'same-origin',
 		signal
 	};
-	if (body !== undefined) {
-		init.headers = { ...init.headers, 'content-type': 'application/json' };
-		init.body = JSON.stringify(body);
-	}
+	if (body !== undefined) init.body = JSON.stringify(body);
 
 	/** @type {Response} */
 	let response;

@@ -6,7 +6,7 @@ import {
 	readImportInput,
 	readOrder,
 	readVideoPatch
-} from './http.js';
+} from './protocol.js';
 import { API_ERROR_REASONS } from '../../youtube/api.js';
 import { YouTubeApiError } from '../youtube.js';
 

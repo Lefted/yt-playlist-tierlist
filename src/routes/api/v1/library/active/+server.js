@@ -1,6 +1,6 @@
 import { apiHandler, json, jsonError, readJson } from '$lib/server/http.js';
 import { getDb } from '$lib/server/db/index.js';
-import { readActivePlaylistId } from '$lib/server/library/http.js';
+import { playlistNotFound, readActivePlaylistId } from '$lib/server/library/protocol.js';
 import { setActivePlaylist } from '$lib/server/library/store.js';
 import { requireUser } from '$lib/server/library/session.js';
 
@@ -24,9 +24,7 @@ export const PUT = apiHandler(async ({ locals, request }) => {
 	}
 
 	const changed = await setActivePlaylist(getDb(), requireUser(locals).id, body.playlistId);
-	if (!changed) {
-		return jsonError(404, 'playlist_not_found', 'You have no playlist with that id.');
-	}
+	if (!changed) return playlistNotFound();
 
 	return json({ activePlaylistId: body.playlistId });
 });

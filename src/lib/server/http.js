@@ -11,6 +11,8 @@
  * Nothing here is cached: all of these endpoints report the state of *this* moment.
  */
 
+import { isHttpError, isRedirect } from '@sveltejs/kit';
+
 /**
  * @typedef {object} ApiError
  * @property {string} code - Stable, machine-readable, e.g. `db_unavailable`.
@@ -86,8 +88,10 @@ export function apiHandler(handler) {
 			try {
 				return await handler(event);
 			} catch (error) {
-				// A redirect (or any other SvelteKit control-flow throw) is not a failure.
-				if (error instanceof Response) return error;
+				// `redirect()` and `error()` throw control flow, not failure — SvelteKit
+				// has to see those objects itself, and turning them into a 500 here would
+				// swallow the answer the handler meant to give.
+				if (isRedirect(error) || isHttpError(error)) throw error;
 				console.error(`[api] ${event?.request?.method} ${event?.url?.pathname} failed:`, error);
 				return jsonError(
 					500,

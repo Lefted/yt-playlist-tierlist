@@ -1,11 +1,16 @@
 /**
- * The protocol half of the library API: which request bodies are acceptable, and
- * what a failed import looks like over HTTP.
+ * The protocol half of the library API: which request bodies are acceptable, what a
+ * failed import looks like over HTTP, and the one refusal three routes share.
  *
- * Pure and free of SvelteKit, so every one of these decisions is a unit test rather
- * than a request. The routes are left with "read, call, serialise".
+ * Pure apart from that last one, and free of SvelteKit either way, so every one of
+ * these decisions is a unit test rather than a request. The routes are left with
+ * "read, call, serialise".
+ *
+ * Not to be confused with `src/lib/server/http.js`, which owns the response envelope
+ * for the whole API; this file is only about the library's own endpoints.
  */
 
+import { jsonError } from '../http.js';
 import { isRating } from '../../types.js';
 
 /** @typedef {import('../../youtube/api.js').ApiErrorReason} ApiErrorReason */
@@ -58,6 +63,19 @@ export function importFailure(error) {
 		code,
 		message
 	};
+}
+
+/**
+ * "You have no playlist with that id."
+ *
+ * The answer to a playlist id that belongs to nobody *and* to one that belongs to
+ * somebody else — three routes give it, and they must give the same one: a 403 for
+ * the second case would confirm that the playlist exists.
+ *
+ * @returns {Response}
+ */
+export function playlistNotFound() {
+	return jsonError(404, 'playlist_not_found', 'You have no playlist with that id.');
 }
 
 /**

@@ -79,7 +79,7 @@ describe('applyImport, current format', () => {
 		);
 
 		expect(summary).toEqual({ playlists: 1, videos: 2, ratingsApplied: 1 });
-		expect(changed).toEqual(['PL1']);
+		expect(changed.map((playlist) => playlist.id)).toEqual(['PL1']);
 		expect(playlists[0].videos.map((video) => video.rating)).toEqual(['A', null]);
 	});
 
@@ -163,7 +163,7 @@ describe('applyImport, legacy format', () => {
 		expect(legacy.videos[0]).toMatchObject({ id: 'v9', title: 'nine', rating: 'B' });
 
 		expect(summary).toEqual({ playlists: 2, videos: 4, ratingsApplied: 2 });
-		expect(changed).toEqual(['PL1', LEGACY_PLAYLIST_ID]);
+		expect(changed.map((playlist) => playlist.id)).toEqual(['PL1', LEGACY_PLAYLIST_ID]);
 	});
 
 	it('touches nothing it does not match', () => {
@@ -176,7 +176,7 @@ describe('applyImport, legacy format', () => {
 		);
 
 		expect(JSON.stringify(existing)).toBe(before);
-		expect(changed).toEqual([LEGACY_PLAYLIST_ID]);
+		expect(changed.map((playlist) => playlist.id)).toEqual([LEGACY_PLAYLIST_ID]);
 		expect(summary.playlists).toBe(1);
 	});
 });

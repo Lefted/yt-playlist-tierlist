@@ -8,7 +8,7 @@
  *
  * Nothing is cached and nothing is persisted. Failures arrive as
  * {@link YouTubeApiError} with a machine-readable `reason` out of the shared list in
- * `src/lib/youtube/api.js`, which `src/lib/server/library/http.js` turns into an
+ * `src/lib/youtube/api.js`, which `src/lib/server/library/protocol.js` turns into an
  * HTTP status and the browser turns back into a sentence.
  */
 
