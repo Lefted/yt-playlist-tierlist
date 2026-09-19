@@ -68,6 +68,16 @@ spec:
             # build absolute URLs; a wrong value shows up as 403 on every POST.
             - name: ORIGIN
               value: 'https://amv.lefted.dev'
+          # Migrations run on boot, so the first request can be minutes away on
+          # a big one. The startupProbe holds the liveness probe off until the
+          # app answers at all — without it, liveness (15s + 3 × 30s) would kill
+          # a pod that is still migrating, and retry forever.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            periodSeconds: 5
+            failureThreshold: 60 # up to 5 minutes to come up
           # /healthz is DB-free on purpose: a probe must not go red because
           # Postgres is briefly busy, and it must stay cheap at this frequency.
           readinessProbe:

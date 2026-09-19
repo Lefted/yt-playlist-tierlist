@@ -79,6 +79,14 @@ Cloudflare → `lefted.dev`:
 Both are zone-wide and already set for the other `lefted.dev` apps — this is a
 verification step, not a change.
 
+> Fallback, only if the zone itself is ever gone from Cloudflare: **disable
+> DNSSEC at the registrar first** and wait for the DS records' TTL to expire,
+> then add the site at Cloudflare (Free plan) and point the registrar's
+> authoritative nameservers at the two Cloudflare ones. Switching the
+> nameservers while DNSSEC is still on breaks resolution for the whole domain:
+> resolvers refuse Cloudflare's answers because the DS records at the registry
+> still name the old signing keys.
+
 ### 2b. DNS
 
 There is a **proxied wildcard record** on the zone, so `amv.lefted.dev` already
@@ -331,19 +339,16 @@ curl -v --resolve amv.lefted.dev:443:173.249.49.11 https://amv.lefted.dev/health
 
 ## Rollback
 
-Two paths, in order of preference:
+In an emergency:
 
-1. **Re-pin the previous SHA.** Check out the commit that deployed it (or edit
-   the `image:` line in `app.yaml` back), then `bash scripts/deploy.sh`. The
-   image is still in the registry, so this is fast, and the manifest keeps
-   naming what actually runs.
-2. **Emergency:** `kubectl -n amv rollout undo deployment/amv-tierlist` puts the
-   previous ReplicaSet back in seconds. It leaves `app.yaml` lying about what is
-   deployed — re-pin and commit as soon as the fire is out.
+```sh
+kubectl -n amv rollout undo deployment/amv-tierlist
+```
 
-Never deploy an image whose migration count is **behind** the live
-`dbSchemaVersion`; the script refuses it, because it would run against a schema
-it does not understand. Roll forward to a fixed commit instead.
+That is seconds, and it leaves `app.yaml` naming an image that is no longer
+running — so re-pin the previous SHA and commit as soon as the fire is out. The
+full picture, including why you can never roll back to an image whose schema is
+behind the live database, is in [`deploys.md`](deploys.md#rollback).
 
 ## Rotate the Postgres password
 

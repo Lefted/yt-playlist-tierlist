@@ -37,6 +37,12 @@ spec:
         app: postgres
     spec:
       containers:
+        # No resource limits here, unlike the app Deployment, and that is a
+        # decision rather than an oversight: a memory limit on Postgres turns a
+        # heavy query into an OOM-killed database, and on a single-node cluster
+        # running one app there is no neighbour for it to starve. The app's
+        # limits exist because a leak in a 2-replica web process is the more
+        # likely failure. Revisit if anything else moves onto this node.
         - name: postgres
           image: postgres:16-alpine
           envFrom:

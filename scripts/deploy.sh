@@ -29,6 +29,11 @@ MANIFEST="deploy/k8s/app.yaml"
 MIGRATIONS_DIR="drizzle"
 BUILD_CONTEXT="."
 
+# Remembered so step 8 can tell a normal deploy from a one-off --image/--namespace
+# run and refuse to commit the latter.
+DEFAULT_IMAGE="$IMAGE"
+DEFAULT_NS="$NS"
+
 recreate=0
 dryrun=0
 no_commit=0
@@ -57,6 +62,8 @@ Options:
                         Default: https://amv.lefted.dev
       --namespace <ns>  Kubernetes namespace. Default: amv
       --image <ref>     Image repo (without tag). Default: localhost:5000/amv-tierlist
+                        Overriding --image or --namespace also suppresses the
+                        commit, so a one-off deploy can't land a wrong ref.
       --no-commit       Apply + verify but don't commit the image: bump (leave it
                         for you to stage). Default: commit after healthy.
   -h, --help            Show this help.
@@ -141,25 +148,32 @@ fi
 
 # ---- 2. resolve the image's embedded migration version ----------------------
 # Drizzle numbers its files 0000_*.sql, 0001_*.sql, … and applies them in that
-# order, one row per file in __drizzle_migrations. So the COUNT of .sql files is
-# the schema version this image carries — the same number the app reports as
-# binarySchemaVersion — and file 0000 means version 1.
+# order, one row per file in __drizzle_migrations. So the COUNT of them is the
+# schema version this image carries — the same number the app reports as
+# binarySchemaVersion — and file 0000 alone means version 1.
+#
+# Only NNNN_-prefixed files count. A hand-written .sql dropped in the directory
+# is not a migration, and counting it would inflate the version and silently
+# defeat the behind-the-DB refusal below.
 migrations=()
 if [[ -d $MIGRATIONS_DIR ]]; then
-  while IFS= read -r f; do migrations+=("$f"); done \
-    < <(find "$MIGRATIONS_DIR" -maxdepth 1 -name '*.sql' | sort)
+  while IFS= read -r f; do
+    base=${f##*/}
+    [[ $base =~ ^[0-9]+_ ]] || continue
+    migrations+=("$f")
+  done < <(find "$MIGRATIONS_DIR" -maxdepth 1 -name '*.sql' | sort)
 fi
-imgMax=${#migrations[@]}
-if (( imgMax == 0 )); then
+imgSchema=${#migrations[@]}
+if (( imgSchema == 0 )); then
   if (( dryrun )); then
-    warn "no *.sql migrations in $MIGRATIONS_DIR — dry run continues."
+    warn "no NNNN_*.sql migrations in $MIGRATIONS_DIR — dry run continues."
   else
-    die "found no *.sql migrations in $MIGRATIONS_DIR — the image would boot with no schema."
+    die "found no NNNN_*.sql migrations in $MIGRATIONS_DIR — the image would boot with no schema."
   fi
 fi
 
 # ---- 3. preflight against the live app (curl /api/v1/meta) ------------------
-liveDb=""
+liveSchema=""
 if (( bootstrap_opt )); then
   warn "--bootstrap: skipping the preflight against $HOST (nothing is expected to be serving it yet)."
 else
@@ -169,18 +183,25 @@ else
 
   case "$httpCode" in
     200)
-      liveDb=$(json_int_field "$metaBody" dbSchemaVersion)
-      [[ -n $liveDb ]] || die "could not parse dbSchemaVersion from $HOST/api/v1/meta:
+      liveSchema=$(json_int_field "$metaBody" dbSchemaVersion)
+      [[ -n $liveSchema ]] || die "could not parse dbSchemaVersion from $HOST/api/v1/meta:
 $metaBody"
       ;;
-    404|502|503)
-      # Either the ingress routes nowhere yet or the deployed build predates
-      # /api/v1/meta. Either way there is no schema version to compare against,
-      # so liveDb stays empty and the gates below become no-ops.
-      warn "HTTP $httpCode from $HOST/api/v1/meta — nothing usable is live there. Skipping the image-behind-DB preflight."
+    404)
+      # The route exists but nothing answers it: either the ingress points at no
+      # pods yet, or the deployed build predates /api/v1/meta. Either way there
+      # is no schema version to compare against, so liveSchema stays empty and
+      # the gates below become no-ops.
+      #
+      # Only 404. A 5xx is NOT treated this way: it usually means the app IS
+      # deployed and currently broken, and skipping the schema gate is exactly
+      # wrong then — you would ship a possibly-behind image on top of a sick
+      # one. Pass --bootstrap if you have looked and there really is nothing
+      # live.
+      warn "HTTP 404 from $HOST/api/v1/meta — nothing answers it. Skipping the image-behind-DB preflight."
       ;;
     000) die "could not reach $HOST/api/v1/meta — is the app up and --host correct? For the very first deploy, pass --bootstrap." ;;
-    *)   die "unexpected HTTP $httpCode from $HOST/api/v1/meta (pass --bootstrap if this is the first deploy):
+    *)   die "unexpected HTTP $httpCode from $HOST/api/v1/meta — check what is live before deploying over it (pass --bootstrap if there really is nothing):
 $metaBody" ;;
   esac
 fi
@@ -188,19 +209,24 @@ fi
 # Refuse an image whose schema is behind the live DB. Migrations are
 # forward-only in prod: such an image would run against a schema it does not
 # understand. Roll FORWARD to a fixed commit instead.
-if [[ -n $liveDb ]] && (( imgMax < liveDb )); then
-  die "this image (commit $SHA) carries $imgMax migration(s), but the live DB is at version $liveDb — it is BEHIND the schema. Deploy a commit whose migration count is >= $liveDb."
+if [[ -n $liveSchema ]] && (( imgSchema < liveSchema )); then
+  die "this image (commit $SHA) carries $imgSchema migration(s), but the live DB is at version $liveSchema — it is BEHIND the schema. Deploy a commit whose migration count is >= $liveSchema."
 fi
 
 # Warn on a destructive migration this deploy INTRODUCES (the files past the
-# live DB version), unless --recreate removes the overlap that makes them risky.
-# Only meaningful when the live version is known. Matches real destructive ops
-# only — not "DROP NOT NULL"/"DROP DEFAULT", which merely relax a constraint.
+# live schema version), unless --recreate removes the overlap that makes them
+# risky. Only meaningful when the live version is known.
+#
+# `DROP` is matched only in front of an object keyword, so the constraint-
+# relaxing `DROP NOT NULL` / `DROP DEFAULT` don't trip it. `ALTER COLUMN` is
+# matched whole, which does include benign forms like `SET DEFAULT` — a false
+# warning costs a second of reading, a missed `SET NOT NULL` costs errors from
+# the old pod during the overlap.
 destructive=""
-if [[ -n $liveDb ]] && (( ! recreate )); then
-  for (( i = liveDb; i < imgMax; i++ )); do
+if [[ -n $liveSchema ]] && (( ! recreate )); then
+  for (( i = liveSchema; i < imgSchema; i++ )); do
     f=${migrations[$i]}
-    if grep -iqE 'DROP[[:space:]]+(TABLE|COLUMN|CONSTRAINT|INDEX|TYPE|SCHEMA|VIEW)|RENAME|TRUNCATE|ALTER[[:space:]]+COLUMN[^;]*TYPE' "$f"; then
+    if grep -iqE 'DROP[[:space:]]+(TABLE|COLUMN|CONSTRAINT|INDEX|TYPE|SCHEMA|VIEW)|RENAME|TRUNCATE|ALTER[[:space:]]+COLUMN' "$f"; then
       destructive+="${destructive:+, }${f##*/}"
     fi
   done
@@ -217,8 +243,8 @@ if (( dryrun )); then
   namespace             : $NS
   commit (image tag)    : $SHA
   image                 : $IMAGE:$SHA
-  image migration count : $imgMax
-  live DB schema version: $([[ -n $liveDb ]] && echo "$liveDb" || echo "<unknown — nothing live (bootstrap)>")
+  image schema version  : $imgSchema
+  live DB schema version: $([[ -n $liveSchema ]] && echo "$liveSchema" || echo "<unknown — nothing live (bootstrap)>")
   strategy              : $([[ $recreate == 1 ]] && echo 'Recreate (scale to 0 first)' || echo 'RollingUpdate (zero-downtime)')
   destructive migrations: ${destructive:-<none detected>}
 
@@ -262,11 +288,17 @@ info "Pinned $MANIFEST -> $IMAGE:$SHA"
 if (( recreate )); then
   info "Recreate: scaling $DEPLOYMENT to 0 so no old pod meets the new schema…"
   kc -n "$NS" scale deployment/"$DEPLOYMENT" --replicas=0
+  drained=0
   for _ in $(seq 1 60); do
     n=$(kc -n "$NS" get pods -l "$SELECTOR" -o name 2>/dev/null | grep -c . || true)
-    [[ "${n:-0}" == "0" ]] && break
+    if [[ "${n:-0}" == "0" ]]; then drained=1; break; fi
     sleep 2
   done
+  # Applying anyway would put the new schema in front of a pod that is still
+  # running the old code — the exact overlap --recreate exists to remove. Stop
+  # instead; the deployment is at 0 replicas, so this is a visible outage and
+  # not something to discover later.
+  (( drained )) || die "--recreate: pods matching $SELECTOR were still running after 120s. The deployment is scaled to 0 and nothing was applied — investigate (kubectl -n $NS get pods -l $SELECTOR), then re-run."
 fi
 info "Applying $MANIFEST…"
 kc -n "$NS" apply -f "$MANIFEST"
@@ -289,6 +321,14 @@ gotBin=$(json_int_field "$latest" binarySchemaVersion)
 info "Live: commit $gotCommit · schema $gotDb (binary $gotBin)."
 
 # ---- 8. commit the bump (only now it's live & healthy; never push) ----------
+# A deploy driven by --image or --namespace pinned a ref that is not what main
+# is supposed to run, so committing it would land a wrong image ref on main from
+# a one-off debugging deploy. Keep the change in the working tree instead.
+if [[ $IMAGE != "$DEFAULT_IMAGE" || $NS != "$DEFAULT_NS" ]] && (( ! no_commit )); then
+  no_commit=1
+  warn "not committing the image: bump — this deploy used a non-default --image/--namespace ($IMAGE in $NS). Revert $MANIFEST when you are done."
+fi
+
 if (( no_commit )); then
   info "Skipping commit (--no-commit). The $MANIFEST image: bump is uncommitted."
 elif git diff --quiet -- "$MANIFEST"; then
@@ -304,6 +344,7 @@ cat <<EOF
 ✓ Deployed $IMAGE:$SHA
     commit $SHA · schema $gotDb · namespace $NS
 
-$( (( no_commit )) && echo "Stage & commit $MANIFEST when ready." || echo "Commit was created locally but NOT pushed. To publish it:
+$( (( no_commit )) && echo "The $MANIFEST image: bump was not committed — stage it, or revert it if this
+was a one-off --image/--namespace run." || echo "Commit was created locally but NOT pushed. To publish it:
     git push" )
 EOF
