@@ -15,12 +15,13 @@
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
+	import { chordLabel } from '$lib/keybindings.js';
 	import { TIERS } from '$lib/tiers.js';
 	import { session } from '$lib/state/session.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
 	import { cn } from '$lib/utils.js';
 	import ShortcutsDialog from './ShortcutsDialog.svelte';
-	import { shortcutTable, tierKeys } from './shortcuts.js';
+	import { shortcutTable, tierChords } from './shortcuts.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -47,8 +48,8 @@
 	 * tier, which is as much as a line of settings copy can carry.
 	 */
 	const tierHint = $derived(
-		Object.values(tierKeys({ bindings: settings.keybindings }) ?? {})
-			.map((keys) => keys[0])
+		Object.values(tierChords({ bindings: settings.keybindings }) ?? {})
+			.map((chords) => (chords[0] ? chordLabel(chords[0]) : ''))
 			.filter(Boolean)
 			.join(' ')
 	);
@@ -69,6 +70,15 @@
 		editOpen = true;
 	}
 </script>
+
+<!-- The same entry sits in the Settings popover and under the shortcut list: both
+	 are places the user asks "what are the keys?" from. -->
+{#snippet editButton()}
+	<Button variant="outline" size="sm" class="self-start" onclick={openEditor}>
+		<Keyboard aria-hidden="true" />
+		Edit shortcuts
+	</Button>
+{/snippet}
 
 <div class={cn('flex flex-wrap items-center gap-1.5', className)}>
 	<Popover.Root>
@@ -190,10 +200,7 @@
 				<Switch bind:checked={settings.shortcuts} />
 			</label>
 
-			<Button variant="outline" size="sm" class="self-start" onclick={openEditor}>
-				<Keyboard aria-hidden="true" />
-				Edit shortcuts
-			</Button>
+			{@render editButton()}
 		</Popover.Content>
 	</Popover.Root>
 
@@ -250,10 +257,7 @@
 				{/if}
 			{/each}
 
-			<Button variant="outline" size="sm" class="self-start" onclick={openEditor}>
-				<Keyboard aria-hidden="true" />
-				Edit shortcuts
-			</Button>
+			{@render editButton()}
 		</Popover.Content>
 	</Popover.Root>
 </div>

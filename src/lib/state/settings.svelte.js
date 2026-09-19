@@ -6,7 +6,7 @@
  * without any component lifecycle being involved.
  */
 
-import { DEFAULT_KEYBINDINGS, normalizeKeybindings } from '$lib/components/rate/shortcuts.js';
+import { DEFAULT_KEYBINDINGS, normalizeKeybindings } from '../keybindings.js';
 import { load, save } from '../storage.js';
 
 /** @typedef {import('../types.js').Settings} Settings */

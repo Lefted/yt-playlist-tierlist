@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_KEYBINDINGS, normalizeKeybindings } from '$lib/components/rate/shortcuts.js';
+import { DEFAULT_KEYBINDINGS, normalizeKeybindings } from '../keybindings.js';
 import { STORAGE_PREFIX } from '../storage.js';
 import { createLocalStorageStub } from '../testing/fixtures.js';
 

@@ -2,23 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
 	BINDABLE_ACTIONS,
 	DEFAULT_KEYBINDINGS,
-	bindingIndex,
+	normalizeKeybindings,
+	withoutChord
+} from '$lib/keybindings.js';
+import {
 	chordConflict,
-	chordFor,
-	chordLabel,
-	formatChord,
 	isActivationTarget,
 	isTypingTarget,
-	normalizeChord,
-	normalizeKeybindings,
-	parseChord,
 	shortcutFor,
 	shortcutKeys,
 	shortcutTable,
 	shortcutsEnabled,
-	tierKeys,
-	withChord,
-	withoutChord
+	tierChords
 } from './shortcuts.js';
 import { RATING_ORDER } from '$lib/types.js';
 
@@ -51,208 +46,30 @@ function bound(overrides) {
 }
 
 /**
+ * The keydown that would produce a stored chord — the inverse of `chordFor`, near
+ * enough for a test.
+ *
+ * @param {string} chord
+ * @returns {any}
+ */
+function keydownFor(chord) {
+	const segments = chord.split('+');
+	const key = segments.pop() ?? '';
+	return keydown(key === 'Space' ? ' ' : key, {
+		ctrlKey: segments.includes('Ctrl'),
+		altKey: segments.includes('Alt'),
+		shiftKey: segments.includes('Shift'),
+		metaKey: segments.includes('Meta')
+	});
+}
+
+/**
  * @param {string|null} [match] - What `querySelector` should find.
  * @returns {any}
  */
 function documentStub(match = null) {
 	return { querySelector: () => match };
 }
-
-describe('chords', () => {
-	it('spells the modifiers in one canonical order, whatever order they came in', () => {
-		expect(normalizeChord('Shift+Ctrl+z')).toBe('Ctrl+Shift+z');
-		expect(normalizeChord('Meta+Alt+Ctrl+Shift+a')).toBe('Ctrl+Alt+Shift+Meta+a');
-	});
-
-	it('stores a single character lower-case, with Shift spelled out', () => {
-		expect(normalizeChord('F')).toBe('f');
-		expect(normalizeChord('Shift+F')).toBe('Shift+f');
-		expect(chordFor(keydown('F', { shiftKey: true }))).toBe('Shift+f');
-		expect(chordFor(keydown('f'))).toBe('f');
-	});
-
-	it('accepts the spellings a person would type', () => {
-		expect(normalizeChord('CTRL+Z')).toBe('Ctrl+z');
-		expect(normalizeChord('cmd+z')).toBe('Meta+z');
-		expect(normalizeChord('  Control + Z  ')).toBe('Ctrl+z');
-		expect(normalizeChord('backspace')).toBe('Backspace');
-	});
-
-	it('round-trips through parse and format', () => {
-		for (const chord of [
-			's',
-			'Shift+f',
-			'Ctrl+z',
-			'Backspace',
-			'ArrowLeft',
-			'Ctrl+Alt+Shift+Meta+q'
-		]) {
-			expect(formatChord(parseChord(chord))).toBe(chord);
-			expect(normalizeChord(chord)).toBe(chord);
-		}
-	});
-
-	it('calls the space bar Space, whatever the browser calls it', () => {
-		expect(chordFor(keydown(' '))).toBe('Space');
-		expect(chordFor(keydown('Spacebar'))).toBe('Space');
-		expect(normalizeChord('space')).toBe('Space');
-	});
-
-	it('treats + as a key, not only as the separator', () => {
-		expect(normalizeChord('+')).toBe('+');
-		expect(normalizeChord('Ctrl++')).toBe('Ctrl++');
-		expect(parseChord('Ctrl++')).toEqual({
-			Ctrl: true,
-			Alt: false,
-			Shift: false,
-			Meta: false,
-			key: '+'
-		});
-	});
-
-	it('refuses anything that is not a chord', () => {
-		for (const text of ['', '   ', 'Ctrl+', 'Nope+z', 'Shift', 'Control', null, 42, {}]) {
-			expect(normalizeChord(/** @type {any} */ (text))).toBeNull();
-		}
-	});
-
-	it('is not a chord while only a modifier is down', () => {
-		expect(chordFor(keydown('Shift', { shiftKey: true }))).toBeNull();
-		expect(chordFor(keydown('Control', { ctrlKey: true }))).toBeNull();
-		expect(chordFor(null)).toBeNull();
-	});
-
-	it('reads back as a key cap, not as storage', () => {
-		expect(chordLabel('s')).toBe('S');
-		expect(chordLabel('Shift+f')).toBe('Shift+F');
-		expect(chordLabel('Ctrl+z')).toBe('Ctrl+Z');
-		expect(chordLabel('Backspace')).toBe('⌫');
-		expect(chordLabel('ArrowRight')).toBe('→');
-		expect(chordLabel('Space')).toBe('Space');
-		expect(chordLabel('nonsense+')).toBe('');
-	});
-});
-
-describe('the default bindings', () => {
-	it('keeps every YouTube key: f is fullscreen and the F tier moves to Shift+F', () => {
-		expect(DEFAULT_KEYBINDINGS.fullscreen).toEqual(['f']);
-		expect(DEFAULT_KEYBINDINGS.rateF).toEqual(['Shift+f']);
-	});
-
-	it('is the letters for the other five tiers', () => {
-		expect(DEFAULT_KEYBINDINGS.rateS).toEqual(['s']);
-		expect(DEFAULT_KEYBINDINGS.rateA).toEqual(['a']);
-		expect(DEFAULT_KEYBINDINGS.rateB).toEqual(['b']);
-		expect(DEFAULT_KEYBINDINGS.rateC).toEqual(['c']);
-		expect(DEFAULT_KEYBINDINGS.rateD).toEqual(['d']);
-	});
-
-	it('keeps the queue, replay, undo and loop keys of #11', () => {
-		expect(DEFAULT_KEYBINDINGS.next).toEqual(['n']);
-		expect(DEFAULT_KEYBINDINGS.previous).toEqual(['p']);
-		expect(DEFAULT_KEYBINDINGS.replay).toEqual(['r']);
-		expect(DEFAULT_KEYBINDINGS.undo).toEqual(['u', 'Backspace', 'Ctrl+z']);
-		expect(DEFAULT_KEYBINDINGS.loop).toEqual(['Shift+l']);
-	});
-
-	it('binds every bindable action and nothing else', () => {
-		expect(Object.keys(normalizeKeybindings(DEFAULT_KEYBINDINGS))).toEqual(
-			BINDABLE_ACTIONS.map((action) => action.id)
-		);
-	});
-
-	it('never gives one chord to two actions', () => {
-		const chords = Object.values(DEFAULT_KEYBINDINGS).flat();
-		expect(new Set(chords).size).toBe(chords.length);
-	});
-
-	it('leaves `?` out — it is fixed, so it cannot be rebound', () => {
-		expect(BINDABLE_ACTIONS.map((action) => action.id)).not.toContain('help');
-	});
-});
-
-describe('normalizeKeybindings', () => {
-	it('fills a missing action from the defaults', () => {
-		expect(normalizeKeybindings({ next: ['x'] }).rateS).toEqual(['s']);
-		expect(normalizeKeybindings({}).undo).toEqual(['u', 'Backspace', 'Ctrl+z']);
-	});
-
-	it('drops an action nobody knows', () => {
-		const bindings = normalizeKeybindings({ rateZ: ['z'], noSuchThing: ['q'] });
-		expect(bindings.rateZ).toBeUndefined();
-		expect(bindings.noSuchThing).toBeUndefined();
-	});
-
-	it('drops a malformed chord and keeps the rest of the row', () => {
-		expect(normalizeKeybindings({ undo: ['u', 'Nope+z', '', 42, null] }).undo).toEqual(['u']);
-	});
-
-	it('canonicalises what it keeps', () => {
-		expect(normalizeKeybindings({ rateF: ['SHIFT+F'], undo: ['CTRL+Z'] })).toMatchObject({
-			rateF: ['Shift+f'],
-			undo: ['Ctrl+z']
-		});
-	});
-
-	it('keeps an action the user unbound entirely', () => {
-		expect(normalizeKeybindings({ loop: [] }).loop).toEqual([]);
-	});
-
-	it('leaves a chord with the first action that claims it', () => {
-		// Hand-edited storage could otherwise make one keystroke ambiguous.
-		const bindings = normalizeKeybindings({ rateS: ['q'], next: ['q'] });
-		expect(bindings.rateS).toEqual(['q']);
-		expect(bindings.next).toEqual([]);
-	});
-
-	it('collapses a chord repeated inside one action', () => {
-		expect(normalizeKeybindings({ replay: ['r', 'R', 'r'] }).replay).toEqual(['r']);
-	});
-
-	it('survives anything at all', () => {
-		for (const raw of [null, undefined, 'nope', 42, []]) {
-			expect(normalizeKeybindings(raw).rateS).toEqual(['s']);
-		}
-	});
-
-	it('hands back a fresh table, never the one it was given', () => {
-		const source = { rateS: ['s'] };
-		const bindings = normalizeKeybindings(source);
-		bindings.rateS.push('q');
-		expect(source.rateS).toEqual(['s']);
-	});
-});
-
-describe('withChord / withoutChord', () => {
-	it('adds and removes without touching the table it was given', () => {
-		const before = normalizeKeybindings({});
-		const added = withChord(before, 'rateS', 'Q');
-		expect(added.rateS).toEqual(['s', 'q']);
-		expect(before.rateS).toEqual(['s']);
-
-		expect(withoutChord(added, 'rateS', 's').rateS).toEqual(['q']);
-	});
-
-	it('ignores a chord an action already has, and a malformed one', () => {
-		const bindings = normalizeKeybindings({});
-		expect(withChord(bindings, 'rateS', 's').rateS).toEqual(['s']);
-		expect(withChord(bindings, 'rateS', 'Nope+z').rateS).toEqual(['s']);
-	});
-
-	it('lets the last chord of an action go', () => {
-		expect(withoutChord(normalizeKeybindings({}), 'loop', 'Shift+l').loop).toEqual([]);
-	});
-});
-
-describe('bindingIndex', () => {
-	it('answers chord → action', () => {
-		const index = bindingIndex(DEFAULT_KEYBINDINGS);
-		expect(index.get('s')).toBe('rateS');
-		expect(index.get('Shift+f')).toBe('rateF');
-		expect(index.get('f')).toBe('fullscreen');
-		expect(index.get('k')).toBeUndefined();
-	});
-});
 
 describe('chordConflict', () => {
 	it('refuses a chord another action already has, and says which', () => {
@@ -349,9 +166,15 @@ describe('shortcutFor with the default bindings', () => {
 		expect(shortcutFor(keydown('l'))).toEqual({ type: 'seekBy', seconds: 10 });
 	});
 
-	it('maps ? to the help list', () => {
+	it('maps ? to the help list — Shift is how the character is typed', () => {
 		expect(shortcutFor(keydown('?', { shiftKey: true }))).toEqual({ type: 'help' });
 		expect(shortcutFor(keydown('?'))).toEqual({ type: 'help' });
+	});
+
+	it('leaves ? with a real modifier alone, macOS’ Cmd+? Help menu included', () => {
+		expect(shortcutFor(keydown('?', { ctrlKey: true }))).toBeNull();
+		expect(shortcutFor(keydown('?', { metaKey: true, shiftKey: true }))).toBeNull();
+		expect(shortcutFor(keydown('?', { altKey: true }))).toBeNull();
 	});
 
 	it('maps u, Backspace and ctrl/cmd+z to undo', () => {
@@ -421,6 +244,14 @@ describe('shortcutFor with the user’s own bindings', () => {
 	it('falls back to the defaults when it is handed nothing', () => {
 		expect(shortcutFor(keydown('s'), {})).toEqual({ type: 'rate', rating: 'S' });
 		expect(shortcutFor(keydown('s'))).toEqual({ type: 'rate', rating: 'S' });
+	});
+
+	it('answers something for every action the user can bind', () => {
+		// The intent table and the action list are two lists that have to stay in step:
+		// an action added without an intent would match its key and then do nothing.
+		for (const { id } of BINDABLE_ACTIONS) {
+			expect(shortcutFor(keydownFor(DEFAULT_KEYBINDINGS[id][0])), id).not.toBeNull();
+		}
 	});
 });
 
@@ -549,6 +380,18 @@ describe('shortcutKeys', () => {
 		expect(keys.loop).toEqual(['Shift+L']);
 	});
 
+	it('stops promising a player key a binding has taken', () => {
+		const keys = shortcutKeys({ bindings: bound({ rateS: ['k'] }) });
+		// `k` rates now, so only `Space` is left to play/pause.
+		expect(keys.playPause).toEqual(['Space']);
+		expect(keys.rateS).toEqual(['K']);
+	});
+
+	it('promises the shadowed key again once the rating keys are switched off', () => {
+		const bindings = bound({ rateS: ['k'] });
+		expect(shortcutKeys({ bindings, ratingKeys: false }).playPause).toEqual(['K', 'Space']);
+	});
+
 	it('follows a rebinding — a hint can never promise a key the page does not answer', () => {
 		const keys = shortcutKeys({ bindings: bound({ rateS: ['k', 'Ctrl+Alt+s'] }) });
 		expect(keys.rateS).toEqual(['K', 'Ctrl+Alt+S']);
@@ -577,24 +420,24 @@ describe('shortcutKeys', () => {
 	});
 });
 
-describe('tierKeys', () => {
-	it('is the tier letters while the rating keys are on', () => {
-		expect(tierKeys()).toEqual({
-			S: ['S'],
-			A: ['A'],
-			B: ['B'],
-			C: ['C'],
-			D: ['D'],
-			F: ['Shift+F']
+describe('tierChords', () => {
+	it('is the bound chords, not the key caps — the caller formats', () => {
+		expect(tierChords()).toEqual({
+			S: ['s'],
+			A: ['a'],
+			B: ['b'],
+			C: ['c'],
+			D: ['d'],
+			F: ['Shift+f']
 		});
 	});
 
 	it('follows a rebinding', () => {
-		expect(tierKeys({ bindings: bound({ rateS: ['k'] }) }).S).toEqual(['K']);
+		expect(tierChords({ bindings: bound({ rateS: ['k'] }) })?.S).toEqual(['k']);
 	});
 
 	it('is nothing at all while they are off', () => {
-		expect(tierKeys({ ratingKeys: false })).toBeNull();
+		expect(tierChords({ ratingKeys: false })).toBeNull();
 	});
 });
 
@@ -628,6 +471,14 @@ describe('shortcutTable', () => {
 	it('drops an action the user unbound rather than showing an empty row', () => {
 		const { rating } = shortcutTable({ bindings: bound({ loop: [] }) });
 		expect(rating.map((entry) => entry.description)).not.toContain('Loop the current video');
+	});
+
+	it('drops a player row a binding has taken over entirely', () => {
+		const { player } = shortcutTable({ bindings: bound({ rateS: ['m'] }) });
+		// `m` was mute's only key; promising it here while `m` rates would be exactly
+		// the promise the page no longer keeps.
+		expect(player.map((entry) => entry.description)).not.toContain('Mute / unmute');
+		expect(player.map((entry) => entry.description)).toContain('Play / pause');
 	});
 
 	it('keeps only the player group while the rating keys are off', () => {

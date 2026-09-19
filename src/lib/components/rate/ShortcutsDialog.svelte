@@ -17,16 +17,16 @@
 
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
-	import { settings } from '$lib/state/settings.svelte.js';
 	import {
 		BINDABLE_ACTIONS,
 		DEFAULT_KEYBINDINGS,
-		chordConflict,
 		chordFor,
 		chordLabel,
 		withChord,
 		withoutChord
-	} from './shortcuts.js';
+	} from '$lib/keybindings.js';
+	import { settings } from '$lib/state/settings.svelte.js';
+	import { chordConflict } from './shortcuts.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -36,14 +36,14 @@
 	/** @type {Props} */
 	let { open = $bindable(false) } = $props();
 
-	/** @type {string|null} The action whose row is waiting for a key. */
+	/** @type {import('$lib/types.js').ActionId|null} The action whose row is waiting for a key. */
 	let recording = $state(null);
 
 	/**
 	 * What to say under one row: a refusal, or a note about what the new chord
 	 * shadows. One at a time — it is always about the row just touched.
 	 *
-	 * @type {{ action: string, text: string, blocked: boolean }|null}
+	 * @type {{ action: import('$lib/types.js').ActionId, text: string, blocked: boolean }|null}
 	 */
 	let message = $state(null);
 
@@ -62,7 +62,7 @@
 	});
 
 	/**
-	 * @param {string} id
+	 * @param {import('$lib/types.js').ActionId} id
 	 * @returns {void}
 	 */
 	function toggleRecording(id) {
@@ -107,7 +107,7 @@
 	}
 
 	/**
-	 * @param {string} id
+	 * @param {import('$lib/types.js').ActionId} id
 	 * @param {string} chord
 	 * @returns {void}
 	 */

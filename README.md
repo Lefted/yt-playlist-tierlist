@@ -120,14 +120,17 @@ it is taken, so swapping two keys means removing one first. Binding a key that t
 YouTube layer uses is allowed and says what it overrides. _Reset to defaults_ puts
 the table above back.
 
-The mapping lives in `src/lib/components/rate/shortcuts.js`, which owns the whole
-vocabulary: the chord grammar (`parseChord`/`formatChord`/`normalizeChord` —
-canonical `Ctrl+Alt+Shift+Meta+key`, single characters stored lower-case),
-`DEFAULT_KEYBINDINGS`, `normalizeKeybindings` (what the stored table is cleaned up
-with), `chordConflict` for the editor, `shortcutFor(event, { bindings, ratingKeys })`
-for the matching, and `shortcutKeys`/`shortcutTable`/`tierKeys` for every hint the
-UI shows. All of them read the same bindings, so no `<kbd>`, tooltip or help row
-can promise a key the page does not answer.
+The bindings themselves are `src/lib/keybindings.js` (chord grammar, actions,
+defaults, `normalizeKeybindings`, `withChord`/`withoutChord`); the Rate page's half
+is `src/lib/components/rate/shortcuts.js` —
+`shortcutFor(event, { bindings, ratingKeys })` for the matching, `chordConflict` for
+the editor, and `shortcutKeys`/`shortcutTable`/`tierChords` for every hint the UI
+shows. All of them read the same bindings, so no `<kbd>`, tooltip or help row can
+promise a key the page does not answer — the player rows even drop the keys a
+binding has taken from them, so `K` stops being offered for play/pause the moment a
+tier claims it.
+
+`Cmd`+`Z` is not a default (the table above is), but the editor will bind it.
 
 **Undo** takes back the last rating (and a manual _Mark unavailable_), restores
 the previous tier and jumps back to that video, up to 50 steps back. It is also
@@ -231,6 +234,12 @@ place; the configuration lives in `components.json`.
 - `src/lib/tiers.js` — the single source of truth for the six tiers: order,
   labels, colours and the shared tier-button chrome. The keys are not here: they
   are the user's, and live in `settings.keybindings`.
+- `src/lib/keybindings.js` — the rating layer's keys as data: the chord grammar
+  (`parseChord`/`formatChord`/`normalizeChord`/`chordLabel`/`ariaKeyshortcuts`), the
+  bindable actions, `DEFAULT_KEYBINDINGS`, and the total operations a stored table is
+  cleaned up (`normalizeKeybindings`) and edited (`withChord`/`withoutChord`) with. It
+  sits here, not next to the Rate page, because `settings` needs the same vocabulary
+  to load and persist the table.
 - `src/lib/storage.js` — the only place that touches `localStorage`; every key is
   namespaced `ytpt:v1:<name>`.
 - `src/lib/youtube/api.js` — pure YouTube Data API calls (`parsePlaylistInput`,
@@ -269,8 +278,9 @@ place; the configuration lives in `components.json`.
   up inside that wrapper — which is how `components/rate/PlayerOverlay.svelte`
   gets on screen while fullscreen.
 - The Rate page's rules are pure modules next to it:
-  `components/rate/shortcuts.js` (the chord grammar, the bindings and the key
-  mapping of both layers; `components/rate/ShortcutsDialog.svelte` is its editor),
+  `components/rate/shortcuts.js` (the key mapping of both layers, the hints and the
+  conflict notes, over `$lib/keybindings.js`; `components/rate/ShortcutsDialog.svelte`
+  is the editor),
   `components/rate/playback.js` (what the end of a video means, loop included)
   and `components/rate/undo.js` (how a reversible step reads).
 - Three tier controls, all driven by `src/lib/tiers.js`:

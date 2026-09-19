@@ -10,9 +10,10 @@
 	 * `$lib/tiers.js` and share `TIER_BUTTON_BASE`; the key hints come from the
 	 * user's bindings instead.
 	 */
+	import { DEFAULT_KEYBINDINGS, ariaKeyshortcuts, chordLabel } from '$lib/keybindings.js';
 	import { TIERS, TIER_BUTTON_BASE } from '$lib/tiers.js';
 	import { cn } from '$lib/utils.js';
-	import { DEFAULT_KEYBINDINGS, tierKeys } from './shortcuts.js';
+	import { tierChords } from './shortcuts.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -35,7 +36,7 @@
 		class: className
 	} = $props();
 
-	const keys = $derived(tierKeys({ bindings: keybindings, ratingKeys: shortcuts }));
+	const chords = $derived(tierChords({ bindings: keybindings, ratingKeys: shortcuts }));
 
 	/** @type {HTMLDivElement|undefined} */
 	let group = $state();
@@ -63,12 +64,12 @@
 			A tier can carry several keys, but the cap has room for one: the first one
 			is the hint, and the help list has the rest. Unbound tiers show none.
 		-->
-		{@const bound = keys?.[tier.rating] ?? []}
-		{@const key = bound[0]}
+		{@const bound = chords?.[tier.rating] ?? []}
+		{@const key = bound[0] ? chordLabel(bound[0]) : ''}
 		<button
 			type="button"
 			aria-pressed={rating === tier.rating}
-			aria-keyshortcuts={bound.length > 0 ? bound.join(' ') : undefined}
+			aria-keyshortcuts={ariaKeyshortcuts(bound)}
 			aria-label={tier.label}
 			title={key ? `${tier.label} (${key})` : tier.label}
 			onclick={() => onrate(tier.rating)}

@@ -43,14 +43,27 @@
  */
 
 /**
- * The keys of the rating layer: action id (`rateS`, `undo`, `fullscreen`, …) → the
- * chords bound to it, each a canonical `Ctrl+Alt+Shift+Meta+key` string.
+ * Everything of the rating layer the user can put on a key.
  *
- * `components/rate/shortcuts.js` owns the vocabulary — the action list, the chord
- * grammar, the defaults and the matching. This typedef is only the shape that goes
+ * The list is closed on purpose: `keybindings.js` builds `BINDABLE_ACTIONS` from
+ * it, and the Rate page turns each id into an intent, so adding an action here is
+ * what makes the page fail to type-check until it answers the new one. `help` is
+ * not among them — `?` is fixed, because it is how the user finds out what the rest
+ * is bound to.
+ *
+ * @typedef {'rateS'|'rateA'|'rateB'|'rateC'|'rateD'|'rateF'
+ *   |'next'|'previous'|'replay'|'undo'|'loop'|'fullscreen'} ActionId
+ */
+
+/**
+ * The keys of the rating layer: action → the chords bound to it, each a canonical
+ * `Ctrl+Alt+Shift+Meta+key` string.
+ *
+ * `$lib/keybindings.js` owns the vocabulary — the chord grammar, the action list,
+ * the defaults and the editing operations. This typedef is only the shape that goes
  * into storage.
  *
- * @typedef {Record<string, string[]>} Keybindings
+ * @typedef {Record<ActionId, string[]>} Keybindings
  */
 
 /**

@@ -17,8 +17,9 @@
 
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
+	import { DEFAULT_KEYBINDINGS } from '$lib/keybindings.js';
 	import { cn } from '$lib/utils.js';
-	import { DEFAULT_KEYBINDINGS, shortcutKeys } from './shortcuts.js';
+	import { shortcutKeys } from './shortcuts.js';
 
 	/**
 	 * @typedef {Object} Props
