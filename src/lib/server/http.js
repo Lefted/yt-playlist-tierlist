@@ -29,16 +29,11 @@ const BASE_HEADERS = {
  * A JSON response.
  *
  * @param {unknown} data - Serialised as the body.
- * @param {object} [options]
- * @param {number} [options.status] - Defaults to 200.
- * @param {Record<string, string>} [options.headers] - Merged over the defaults.
+ * @param {number} [status] - Defaults to 200.
  * @returns {Response}
  */
-export function json(data, { status = 200, headers } = {}) {
-	return new Response(JSON.stringify(data), {
-		status,
-		headers: { ...BASE_HEADERS, ...headers }
-	});
+export function json(data, status = 200) {
+	return new Response(JSON.stringify(data), { status, headers: BASE_HEADERS });
 }
 
 /**
@@ -47,12 +42,10 @@ export function json(data, { status = 200, headers } = {}) {
  * @param {number} status - HTTP status, e.g. 503.
  * @param {string} code - Stable error code, e.g. `db_unavailable`.
  * @param {string} message - One complete sentence for a human.
- * @param {object} [options]
- * @param {Record<string, string>} [options.headers] - Merged over the defaults.
  * @returns {Response}
  */
-export function jsonError(status, code, message, { headers } = {}) {
+export function jsonError(status, code, message) {
 	/** @type {ApiErrorBody} */
 	const body = { error: { code, message } };
-	return json(body, { status, headers });
+	return json(body, status);
 }

@@ -2,7 +2,7 @@ import { serverConfig } from '$lib/server/config.js';
 import { getClient } from '$lib/server/db/index.js';
 import { countAppliedMigrations, countShippedMigrations } from '$lib/server/db/migrations.js';
 import { json, jsonError } from '$lib/server/http.js';
-import { buildMeta, STARTED_AT } from '$lib/server/meta.js';
+import { buildMeta } from '$lib/server/meta.js';
 
 /**
  * What is running here, and did its migrations land?
@@ -16,25 +16,34 @@ import { buildMeta, STARTED_AT } from '$lib/server/meta.js';
 export async function GET() {
 	const config = serverConfig();
 
+	// Read from disk, and kept out of the try below: a journal this process cannot
+	// read is a broken image, not an outage, and answering 503 for it would send
+	// whoever deployed it (or `scripts/deploy.sh`) after the database for nothing.
+	let binarySchemaVersion;
 	try {
-		// The migration folder is read from disk, but boot already proved it is there:
-		// `applyMigrations` reads the same journal, and a missing one kills the process.
-		const [dbSchemaVersion, binarySchemaVersion] = await Promise.all([
-			countAppliedMigrations(getClient()),
-			countShippedMigrations()
-		]);
+		binarySchemaVersion = await countShippedMigrations();
+	} catch (error) {
+		console.error('[meta] could not read the shipped migrations:', error);
+		return jsonError(
+			500,
+			'migrations_unreadable',
+			'This build cannot read its own migration journal; the image is incomplete.'
+		);
+	}
+
+	try {
+		const dbSchemaVersion = await countAppliedMigrations(getClient());
 
 		return json(
 			buildMeta({
 				commit: config.gitSha,
 				buildTime: config.buildTime,
-				startedAt: STARTED_AT,
 				dbSchemaVersion,
 				binarySchemaVersion
 			})
 		);
 	} catch (error) {
-		console.error('[meta] could not read the schema versions:', error);
+		console.error('[meta] could not read the applied migrations:', error);
 		return jsonError(
 			503,
 			'db_unavailable',

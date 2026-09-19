@@ -18,6 +18,10 @@ installs as a PWA on desktop and phone.
 Importing a playlist calls the YouTube Data API v3, which needs your own key.
 It is free, takes a few minutes and does not require billing.
 
+The import still runs in the browser with the key you paste in below. A deployed
+server carries a key of its own (`YOUTUBE_API_KEY`, required in production) and
+will make that call itself from #17 on; until then the two do not meet.
+
 1. Open the [Google Cloud console](https://console.cloud.google.com/) and create
    a project (or pick an existing one).
 2. Go to **APIs & Services → Library**, search for **YouTube Data API v3** and
@@ -132,7 +136,7 @@ Failures everywhere under `/api/v1` share one shape, `{ error: { code, message }
 
 The `*.db.test.js` suites need a real Postgres and **wipe** the database they are
 given, so they only run when `TEST_DATABASE_URL` is set; otherwise `npm test`
-skips them with a note.
+skips them and says why (`npx vitest run --reporter=verbose` shows the line).
 
 ```bash
 TEST_DATABASE_URL=postgres://amv:amv@localhost:5432/amv npm test

@@ -14,11 +14,8 @@ describe('json', () => {
 		expect(json({ ok: true }).headers.get('cache-control')).toBe('no-store');
 	});
 
-	it('takes a status and extra headers', () => {
-		const response = json({ ok: true }, { status: 201, headers: { 'x-request-id': 'abc' } });
-
-		expect(response.status).toBe(201);
-		expect(response.headers.get('x-request-id')).toBe('abc');
+	it('takes a status', () => {
+		expect(json({ ok: true }, 201).status).toBe(201);
 	});
 });
 

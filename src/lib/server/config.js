@@ -77,11 +77,12 @@ export function readConfig(source) {
 		problems.push('DATABASE_URL must be a postgres:// or postgresql:// URL');
 	}
 
+	// The browser still imports with the key its user pasted in; #17 moves that call
+	// behind the server. A deployment carries the server-side key from the start, so
+	// that switch is a release rather than a release plus a secret change.
 	const youtubeApiKey = clean(source.YOUTUBE_API_KEY);
 	if (isProduction && !youtubeApiKey) {
-		problems.push(
-			'YOUTUBE_API_KEY is required in production (the server calls YouTube, not the browser)'
-		);
+		problems.push('YOUTUBE_API_KEY is required in production (the server-side import key)');
 	}
 
 	const origin = clean(source.ORIGIN);
@@ -103,6 +104,9 @@ export function readConfig(source) {
 		problems.push('ADMIN_EMAIL and ADMIN_PASSWORD must be set together or not at all');
 	}
 
+	// adapter-node reads `PORT` itself, and does not complain about a nonsensical
+	// one — it would quietly listen somewhere else. Validating it here is how a typo
+	// in the manifest becomes a boot message instead of an unreachable pod.
 	const rawPort = clean(source.PORT);
 	const port = rawPort === null ? 3000 : Number(rawPort);
 	if (!Number.isInteger(port) || port < 1 || port > 65535) {

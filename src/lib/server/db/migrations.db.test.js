@@ -7,14 +7,15 @@
  */
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import postgres from 'postgres';
 import { buildMeta } from '../meta.js';
+import { createDb } from './index.js';
 import {
 	applyMigrations,
 	countAppliedMigrations,
 	countShippedMigrations,
 	MIGRATION_LOCK_KEY
 } from './migrations.js';
+import { appMeta } from './schema.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -28,12 +29,18 @@ if (!databaseUrl) {
 const describeDb = databaseUrl ? describe : describe.skip;
 
 describeDb('migrations against a real database', () => {
-	const client = postgres(databaseUrl ?? '', { max: 2, onnotice: () => {} });
+	/** A handle of its own, so nothing here touches the process-wide pool. */
+	const { client, db } = createDb(databaseUrl ?? '', { max: 2 });
 
 	/** Puts the database back to "never migrated". */
 	async function reset() {
 		await client`drop table if exists app_meta cascade`;
 		await client`drop schema if exists drizzle cascade`;
+	}
+
+	/** @returns {Promise<void>} */
+	function migrateOnce() {
+		return applyMigrations(/** @type {string} */ (databaseUrl));
 	}
 
 	beforeEach(reset);
@@ -47,45 +54,43 @@ describeDb('migrations against a real database', () => {
 	});
 
 	it('applies every shipped migration', async () => {
-		await applyMigrations(/** @type {string} */ (databaseUrl));
+		await migrateOnce();
 
 		const shipped = await countShippedMigrations();
 		expect(shipped).toBeGreaterThan(0);
 		expect(await countAppliedMigrations(client)).toBe(shipped);
 	});
 
-	it('creates the table the schema describes', async () => {
-		await applyMigrations(/** @type {string} */ (databaseUrl));
+	it('creates the table schema.js describes, as Drizzle sees it', async () => {
+		await migrateOnce();
 
-		await client`insert into app_meta ${client({ key: 'test', value: 'ok' })}`;
-		const [row] = await client`select key, value, updated_at from app_meta where key = 'test'`;
+		await db.insert(appMeta).values({ key: 'test', value: 'ok' });
+		const [row] = await db.select().from(appMeta);
 
+		expect(row.key).toBe('test');
 		expect(row.value).toBe('ok');
-		expect(row.updated_at).toBeInstanceOf(Date);
+		expect(row.updatedAt).toBeInstanceOf(Date);
 	});
 
 	it('is a no-op the second time and leaves the data alone', async () => {
-		await applyMigrations(/** @type {string} */ (databaseUrl));
-		await client`insert into app_meta ${client({ key: 'kept', value: 'across boots' })}`;
+		await migrateOnce();
+		await db.insert(appMeta).values({ key: 'kept', value: 'across boots' });
 
-		await applyMigrations(/** @type {string} */ (databaseUrl));
+		await migrateOnce();
 
 		expect(await countAppliedMigrations(client)).toBe(await countShippedMigrations());
-		const [row] = await client`select value from app_meta where key = 'kept'`;
+		const [row] = await db.select().from(appMeta);
 		expect(row.value).toBe('across boots');
 	});
 
 	it('serialises two boots racing for the same empty database', async () => {
-		await Promise.all([
-			applyMigrations(/** @type {string} */ (databaseUrl)),
-			applyMigrations(/** @type {string} */ (databaseUrl))
-		]);
+		await Promise.all([migrateOnce(), migrateOnce()]);
 
 		expect(await countAppliedMigrations(client)).toBe(await countShippedMigrations());
 	});
 
 	it('releases the advisory lock, so the next boot is not stuck behind it', async () => {
-		await applyMigrations(/** @type {string} */ (databaseUrl));
+		await migrateOnce();
 
 		const [lock] = await client`
 			select count(*)::int as count from pg_locks
@@ -95,7 +100,7 @@ describeDb('migrations against a real database', () => {
 	});
 
 	it('reports agreeing schema versions to /api/v1/meta once migrated', async () => {
-		await applyMigrations(/** @type {string} */ (databaseUrl));
+		await migrateOnce();
 
 		const meta = buildMeta({
 			dbSchemaVersion: await countAppliedMigrations(client),

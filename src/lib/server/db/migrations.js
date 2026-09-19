@@ -14,12 +14,11 @@
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
-import postgres from 'postgres';
+import { createDb } from './index.js';
 
 /** Folder `drizzle-kit` writes to, resolved against the working directory. */
-export const MIGRATIONS_FOLDER = 'drizzle';
+const MIGRATIONS_FOLDER = 'drizzle';
 
 /**
  * Advisory lock id shared by every replica of this app.
@@ -31,8 +30,9 @@ export const MIGRATIONS_FOLDER = 'drizzle';
  */
 export const MIGRATION_LOCK_KEY = 411_500_215;
 
-/** Drizzle's bookkeeping table; `migrate()` creates it on first use. */
-const MIGRATIONS_TABLE = 'drizzle.__drizzle_migrations';
+/** Drizzle's own bookkeeping, created by `migrate()` on first use. */
+const MIGRATIONS_SCHEMA = 'drizzle';
+const MIGRATIONS_TABLE = '__drizzle_migrations';
 
 /**
  * Applies every pending migration, under the advisory lock.
@@ -42,16 +42,14 @@ const MIGRATIONS_TABLE = 'drizzle.__drizzle_migrations';
  * hand the migration a different connection than the one holding the lock.
  *
  * @param {string} databaseUrl
- * @param {object} [options]
- * @param {string} [options.folder] - Defaults to {@link MIGRATIONS_FOLDER}.
  * @returns {Promise<void>} Resolves once the database is at the shipped version.
  */
-export async function applyMigrations(databaseUrl, { folder = MIGRATIONS_FOLDER } = {}) {
-	const client = postgres(databaseUrl, { max: 1, onnotice: () => {} });
+export async function applyMigrations(databaseUrl) {
+	const { client, db } = createDb(databaseUrl, { max: 1 });
 	try {
 		await client`select pg_advisory_lock(${MIGRATION_LOCK_KEY})`;
 		try {
-			await migrate(drizzle(client), { migrationsFolder: path.resolve(folder) });
+			await migrate(db, { migrationsFolder: path.resolve(MIGRATIONS_FOLDER) });
 		} finally {
 			// Releasing explicitly rather than leaning on the disconnect keeps a pooler
 			// (pgbouncer in session mode, say) from holding the lock after we are done.
@@ -67,13 +65,15 @@ export async function applyMigrations(databaseUrl, { folder = MIGRATIONS_FOLDER 
  * `/api/v1/meta`.
  *
  * Read from the journal rather than by counting `.sql` files: the journal is what
- * `migrate()` itself walks, so the two can never disagree.
+ * `migrate()` itself walks, so the two can never disagree about what will be
+ * applied. `scripts/deploy.sh` counts `drizzle/NNNN_*.sql` instead, because it has
+ * no app to ask — `migrations.test.js` holds the two definitions to the same
+ * number so that gate cannot drift away from this one.
  *
- * @param {string} [folder] - Defaults to {@link MIGRATIONS_FOLDER}.
  * @returns {Promise<number>}
  */
-export async function countShippedMigrations(folder = MIGRATIONS_FOLDER) {
-	const journalPath = path.resolve(folder, 'meta', '_journal.json');
+export async function countShippedMigrations() {
+	const journalPath = path.resolve(MIGRATIONS_FOLDER, 'meta', '_journal.json');
 	const journal = JSON.parse(await readFile(journalPath, 'utf8'));
 	return Array.isArray(journal?.entries) ? journal.entries.length : 0;
 }
@@ -90,9 +90,12 @@ export async function countShippedMigrations(folder = MIGRATIONS_FOLDER) {
  * @returns {Promise<number>}
  */
 export async function countAppliedMigrations(client) {
-	const [table] = await client`select to_regclass(${MIGRATIONS_TABLE}) as name`;
+	const [table] =
+		await client`select to_regclass(${`${MIGRATIONS_SCHEMA}.${MIGRATIONS_TABLE}`}) as name`;
 	if (!table?.name) return 0;
 
-	const [row] = await client`select count(*)::int as count from drizzle.__drizzle_migrations`;
+	const [row] = await client`
+		select count(*)::int as count from ${client(MIGRATIONS_SCHEMA)}.${client(MIGRATIONS_TABLE)}
+	`;
 	return Number(row?.count ?? 0);
 }
