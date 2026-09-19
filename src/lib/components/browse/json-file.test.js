@@ -1,6 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyLibraryFile, takeFile } from './json-file.js';
+import { libraryPayload, makePlaylist, makeVideo, stubApi } from '$lib/testing/fixtures.js';
 import { library } from '$lib/state/library.svelte.js';
+
+vi.mock('$lib/notify.js', () => ({ notifyError: vi.fn() }));
 
 /**
  * @param {string} text
@@ -40,16 +43,31 @@ describe('applyLibraryFile', () => {
 		library.clear();
 	});
 
-	it('imports an exported library and reports what landed', async () => {
-		const playlist = {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	/**
+	 * @param {any} answer - What `POST /library/import-json` says.
+	 * @returns {void}
+	 */
+	function stubImport(answer) {
+		stubApi({ 'POST /library/import-json': answer });
+	}
+
+	it('sends the file and reports what the server merged', async () => {
+		const stored = makePlaylist({
 			id: 'PLexample',
-			title: 'Example',
-			videos: [
-				{ id: 'aaaaaaaaaaa', title: 'One', rating: 'S' },
-				{ id: 'bbbbbbbbbbb', title: 'Two', rating: null }
-			]
-		};
-		const notice = await applyLibraryFile(jsonFile(JSON.stringify({ playlists: [playlist] })));
+			videos: [makeVideo({ id: 'aaaaaaaaaaa', rating: 'S' }), makeVideo({ id: 'bbbbbbbbbbb' })]
+		});
+		stubImport({
+			summary: { playlists: 1, videos: 2, ratingsApplied: 1 },
+			library: libraryPayload([stored])
+		});
+
+		const notice = await applyLibraryFile(
+			jsonFile(JSON.stringify({ playlists: [{ id: 'PLexample', videos: [] }] }))
+		);
 
 		expect(notice.tone).toBe('ok');
 		expect(notice.text).toContain('2 video(s)');
@@ -58,7 +76,12 @@ describe('applyLibraryFile', () => {
 		expect(library.playlists).toHaveLength(1);
 	});
 
-	it('reports invalid JSON instead of throwing', async () => {
+	it('reports a rejected file instead of throwing', async () => {
+		stubImport({
+			status: 400,
+			body: { error: { code: 'invalid_export', message: 'That file is not valid JSON.' } }
+		});
+
 		const notice = await applyLibraryFile(jsonFile('not json at all'));
 
 		expect(notice.tone).toBe('error');
@@ -66,10 +89,16 @@ describe('applyLibraryFile', () => {
 		expect(library.playlists).toHaveLength(0);
 	});
 
-	it('reports an unrecognised shape instead of throwing', async () => {
-		const notice = await applyLibraryFile(jsonFile('{"nope":true}'));
+	it('reports being offline instead of throwing', async () => {
+		stubApi({
+			'POST /library/import-json': () => {
+				throw new TypeError('Failed to fetch');
+			}
+		});
+
+		const notice = await applyLibraryFile(jsonFile('{"playlists":[]}'));
 
 		expect(notice.tone).toBe('error');
-		expect(notice.text).toContain('Unrecognised export');
+		expect(notice.text).toMatch(/connection/i);
 	});
 });

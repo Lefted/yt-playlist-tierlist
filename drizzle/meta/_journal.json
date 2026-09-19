@@ -15,6 +15,13 @@
       "when": 1789816567738,
       "tag": "0001_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789822599761,
+      "tag": "0002_library",
+      "breakpoints": true
     }
   ]
 }

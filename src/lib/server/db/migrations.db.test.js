@@ -16,7 +16,7 @@ import {
 	MIGRATION_LOCK_KEY
 } from './migrations.js';
 import { appMeta } from './schema.js';
-import { claimTestDatabase, DB_LOCK_TIMEOUT_MS } from './testing.js';
+import { claimTestDatabase, DB_LOCK_TIMEOUT_MS, emptyTestDatabase } from './testing.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -42,9 +42,7 @@ describeDb('migrations against a real database', () => {
 	 * left the later ones behind.
 	 */
 	async function reset() {
-		await client`drop table if exists invites, sessions, users, app_meta cascade`;
-		await client`drop type if exists user_role cascade`;
-		await client`drop schema if exists drizzle cascade`;
+		await emptyTestDatabase(client);
 	}
 
 	/** @returns {Promise<void>} */

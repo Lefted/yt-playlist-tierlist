@@ -50,8 +50,8 @@ function handle() {
 }
 
 /**
- * The Drizzle instance request handlers query through — #16's users and sessions
- * and #17's library are its first callers; this ticket has no table to read.
+ * The Drizzle instance request handlers query through — accounts, sessions and the
+ * library all read and write through this one pool.
  *
  * @returns {DbHandle['db']}
  */

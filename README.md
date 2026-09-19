@@ -5,22 +5,21 @@ Rank the videos of a YouTube playlist into tiers (S/A/B/C/D/F).
 Point it at a playlist, and it pulls in every video with its title, channel,
 thumbnail and duration. **Browse** is the library: filter by tier, search, sort,
 shuffle, and rate any card in place. **Rate** is the focused loop — the video
-plays, you press a key, the next one starts. Ratings persist in the browser and
-can be exported to a JSON file and restored on another device.
+plays, you press a key, the next one starts. Ratings live with your account, so
+they follow you to the next device, and can still be exported to a JSON file.
 
-Every page is rendered in the browser (`ssr = false`), and your ratings still live
-in `localStorage` — but the app is served by its own small Node server now, and
-you sign in to reach it: invite-only accounts and sessions live in Postgres, and
-the library follows in #17. It installs as a PWA on desktop and phone.
+Every page is rendered in the browser (`ssr = false`), but the app is served by
+its own small Node server and you sign in to reach it: invite-only accounts,
+sessions and the whole library live in Postgres. It installs as a PWA on desktop
+and phone.
 
 ## Getting a YouTube Data API key
 
-Importing a playlist calls the YouTube Data API v3, which needs your own key.
-It is free, takes a few minutes and does not require billing.
-
-The import still runs in the browser with the key you paste in below. A deployed
-server carries a key of its own (`YOUTUBE_API_KEY`, required in production) and
-will make that call itself from #17 on; until then the two do not meet.
+Importing a playlist calls the YouTube Data API v3. **The key belongs to the
+installation, not to the user**: it is `YOUTUBE_API_KEY` in the server's
+environment, the server makes the call, and nobody signing in ever sees or types
+one. Only whoever runs the server needs the steps below; it is free, takes a few
+minutes and does not require billing.
 
 1. Open the [Google Cloud console](https://console.cloud.google.com/) and create
    a project (or pick an existing one).
@@ -28,23 +27,21 @@ will make that call itself from #17 on; until then the two do not meet.
    press **Enable**.
 3. Go to **APIs & Services → Credentials → Create credentials → API key** and
    copy the key.
-4. Press **Restrict key** and, under **Application restrictions**, choose
-   **Websites** (HTTP referrers). Add the origins you serve the app from — e.g.
-   `http://localhost:5173/*` for development and `https://your-host/*` for the
-   deployed copy. Under **API restrictions**, restrict the key to
-   **YouTube Data API v3**.
-5. Paste the key into the import dialog on the Browse page. It is stored under
-   `ytpt:v1:settings` in your browser and sent only to `googleapis.com`.
+4. Press **Restrict key**. Under **Application restrictions** choose **None** or
+   an IP restriction naming the server — an HTTP-referrer restriction is for keys
+   used by a browser, and this one is not. Under **API restrictions**, restrict
+   the key to **YouTube Data API v3**.
+5. Put it in `.env` (development) or in the `amv-env` Secret (production) as
+   `YOUTUBE_API_KEY`. It never leaves the server.
 
-A referrer-restricted key is visible to anyone using the app — that is inherent
-to a browser-only app, and the restriction is what keeps it from being usable
-elsewhere. Importing a playlist of _n_ videos costs roughly `1 + ceil(n/50) * 2`
-quota units against the default 10 000 units per day, so several hundred imports
-a day fit comfortably.
+Importing a playlist of _n_ videos costs roughly `1 + ceil(n/50) * 2` quota units
+against the default 10 000 units per day, so several hundred imports a day fit
+comfortably — shared by everyone with an account, which is the trade for nobody
+having to make a key.
 
-A `quotaExceeded`, `keyInvalid` or `playlistNotFound` answer is reported in the
-dialog in plain words; nothing else in the app needs the API, so an existing
-library keeps working without a key.
+A `quotaExceeded`, `keyInvalid`, `keyMissing` or `playlistNotFound` answer is
+reported in the import dialog in plain words; nothing else in the app needs the
+API, so an existing library keeps working without a key.
 
 ## Commands
 
@@ -131,8 +128,30 @@ pointed at yet.
 
 `dbSchemaVersion` counts the migrations the database has recorded,
 `binarySchemaVersion` the ones this build ships: equal after a healthy deploy.
+
+The library API, all of it scoped to the signed-in account:
+
+| Route                                            | Does                                                                             |
+| ------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `GET /api/v1/library`                            | `{ activePlaylistId, playlists }` — the whole library                            |
+| `PUT /api/v1/library/active`                     | `{ playlistId }` (or `null`) — which playlist is being worked on                 |
+| `POST /api/v1/library/import-json`               | Body is an export file; merges it in and answers `{ summary, library }`          |
+| `GET /api/v1/library/export`                     | The backup file, byte for byte what the Browse page downloads                    |
+| `POST /api/v1/playlists/import`                  | `{ input }` — reads the playlist from YouTube and stores it; re-import refreshes |
+| `DELETE /api/v1/playlists/:playlistId`           | Removes a playlist and its ratings                                               |
+| `PUT /api/v1/playlists/:playlistId/order`        | `{ order }` — the playback order (shuffle, reset)                                |
+| `PATCH /api/v1/playlists/:playlistId/videos/:id` | `{ rating }` and/or `{ unavailable }`                                            |
+
+`:playlistId` and `:id` are the **YouTube** ids, which is what the browser holds;
+they are unique per account, and a video is addressed through its playlist because
+the same video in two playlists carries two ratings. Every lookup is
+`(user_id, youtube_id)`, so another account's id simply finds nothing.
+
 Failures everywhere under `/api/v1` share one shape, `{ error: { code, message } }`
-(`src/lib/server/http.js`).
+(`src/lib/server/http.js`). Mutations must be `Content-Type: application/json` and
+carry a matching `Origin`; a read needs neither. An import reports YouTube's own
+vocabulary as its `code` (`quotaExceeded`, `keyInvalid`, `keyMissing`, `network`,
+`playlistNotFound`, `unknown`), which is what the dialog turns into a sentence.
 
 ### Database integration tests
 
@@ -143,6 +162,12 @@ skips them and says why (`npx vitest run --reporter=verbose` shows the line).
 ```bash
 TEST_DATABASE_URL=postgres://amv:amv@localhost:5432/amv npm test
 ```
+
+Each suite empties the database first (`emptyTestDatabase` in
+`src/lib/server/db/testing.js` drops every table and enum it finds, rather than a
+hand-kept list) and then applies the migrations, so they are independent of each
+other and of whatever was in there before. They queue on an advisory lock, because
+Vitest runs files in parallel and they all want the same database.
 
 ### Container
 
@@ -345,35 +370,62 @@ page under you mid-video.
 
 ## Your data
 
-Your library still lives in your browser's `localStorage`, under two keys. The
-server's database holds your account and your sessions; the ratings follow in #17:
+Your library lives in the server's Postgres, one library per account. Only the
+preferences of the machine in front of you stay in `localStorage`:
 
-| Key                | Contents                                                                                                               |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `ytpt:v1:library`  | Every imported playlist, its videos, their tiers and the shuffle order                                                 |
-| `ytpt:v1:settings` | API key, _skip rated_, _auto-advance_, _fullscreen on play_, _loop_, _keyboard shortcuts_ (on/off) and the keybindings |
+| Where                                     | Contents                                                                                                         |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `playlists` (Postgres)                    | One row per imported playlist per account: its YouTube id, title, channel, thumbnail and the playback order      |
+| `videos` (Postgres)                       | One row per video of a playlist: title, channel, duration, its tier, whether it is unplayable, when it was rated |
+| `user_state` (Postgres)                   | Which playlist the account is working on                                                                         |
+| `users`, `sessions`, `invites` (Postgres) | The account itself (see [Accounts](#accounts))                                                                   |
+| `ytpt:v1:settings`                        | _skip rated_, _auto-advance_, _fullscreen on play_, _loop_, _keyboard shortcuts_ (on/off) and the keybindings    |
+| `ytpt:v1:library.migrated`                | Nothing the app reads — a copy of the pre-accounts library, kept after it was imported (see below)               |
 
-Both payloads carry a `version` field so a future format change can migrate
-instead of discarding ratings. `src/lib/storage.js` is the only module that
-touches storage; reads never throw, so private-browsing mode or a disabled
-storage quota degrades to "nothing saved" rather than a crash.
+That split is deliberate: ratings are about the playlist and should follow you to
+the next device; which key rates an S and whether a video should go fullscreen are
+about the machine and should not. `ytpt:v1:library` is gone — nothing writes it any
+more, and the settings loader ignores a stored `apiKey` from an older version.
 
-Clearing site data, "clear cookies and site data" or an incognito window ends
-the session and loses the ratings — so:
+`src/lib/storage.js` is still the only module that touches `localStorage`; reads
+never throw, so private-browsing mode or a disabled storage quota degrades to
+"nothing saved" rather than a crash.
+
+### Bringing a library off this device
+
+A browser that used the app before it had accounts still has `ytpt:v1:library`.
+The first time you sign in on it with an account that has nothing imported, Browse
+offers to import it; an account that already has playlists finds the same action
+in the playlist card's menu ("Import from this device"). Either way it goes through
+the ordinary backup path, so nothing is overwritten — and on success the key is
+**renamed** to `ytpt:v1:library.migrated` rather than deleted, so a migration you
+have second thoughts about is still recoverable by hand.
+
+### Backups
+
+Clearing site data ends the session but no longer loses ratings — they are on the
+server. Losing the server is a different matter, so:
 
 - **Export** (playlist card on Browse) downloads
-  `{ version, exportedAt, playlists }` as JSON. That file is the backup and the
-  way to move a library to another browser or device.
+  `{ version, exportedAt, playlists }` as JSON; `GET /api/v1/library/export`
+  produces the same file for a script. That is the backup, and the way to move a
+  library to another installation.
 - **Import JSON** merges such a file back in. It never overwrites a tier you
   already gave a video; it only fills in the blanks. The empty state offers the
-  same restore, so a backup gets you back in without an API key.
+  same restore.
 - A bare array of `{ videoId, title, rating }` — the export format of the
   original vanilla-JS prototype — is also accepted. Its ratings are applied to
   matching videos of the playlists you already have; entries matching nothing
-  land in a local `legacy-import` playlist.
+  land in a `legacy-import` playlist.
 - **Re-importing the same playlist is the refresh path**: new videos are added,
   metadata is updated, and your tiers (and any video you marked unavailable) are
   kept.
+
+Writes are applied on screen before the server has agreed to them, so rating feels
+like pressing a key rather than submitting a form. If the write then fails — the
+usual reason is being offline — the change is taken back and a message says so.
+There is no offline write queue; API requests are `NetworkOnly` for the service
+worker, and an offline library is a read-only one.
 
 ## Stack
 
@@ -426,15 +478,26 @@ place; the configuration lives in `components.json`.
   sits here, not next to the Rate page, because `settings` needs the same vocabulary
   to load and persist the table.
 - `src/lib/storage.js` — the only place that touches `localStorage`; every key is
-  namespaced `ytpt:v1:<name>`.
-- `src/lib/youtube/api.js` — pure YouTube Data API calls (`parsePlaylistInput`,
-  `fetchPlaylistMeta`, `fetchPlaylistVideos`) that fail with a typed `YouTubeApiError`.
+  namespaced `ytpt:v1:<name>`. Settings and the one-time migration marker, nothing else.
+- `src/lib/api.js` — the browser's side of `/api/v1`: one `apiFetch`, and an
+  `ApiError` carrying the server's `code` and sentence, so no caller looks at a
+  status.
+- `src/lib/youtube/api.js` — the pure half of the YouTube vocabulary
+  (`parsePlaylistInput`, `parseIsoDuration`, the closed list of failure reasons).
+  The calls themselves are the server's (`src/lib/server/youtube.js`).
+- `src/lib/library-io.js` — the backup format: what an export looks like, what an
+  import does to a library. Shared, because the browser writes the download and the
+  server writes `GET /library/export` and applies `POST /library/import-json`.
+- `src/lib/notify.js` — how non-component code raises a message; the library uses
+  it when an optimistic write has to be rolled back.
 - `src/lib/youtube/iframe-api.js` — loads the IFrame Player API once per page and
   maps its error codes to `unavailable` / `other`.
 - `src/lib/playlist.js` — pure playlist operations (normalising untrusted data,
   reconciling the playback order, merging a re-import) that the state modules build on.
-- `src/lib/state/*.svelte.js` — rune-based singletons: `settings`, `library`
-  (playlists, ratings, import/export) and `session` (the rating queue).
+- `src/lib/state/*.svelte.js` — rune-based singletons: `settings` (local),
+  `library` (the account's playlists and ratings, read from and written to the API,
+  applied on screen first and rolled back on refusal) and `session` (the rating
+  queue, in memory).
 - `src/lib/format.js` — display helpers (`formatDuration`, `formatDate`,
   `exportFileName`); `src/lib/youtube/urls.js` — the youtube.com links and the
   thumbnail fallback. Both are total: unusable input becomes an empty string.
@@ -495,9 +558,19 @@ side.
   landed; `db/testing.js` — the advisory lock the `*.db.test.js` suites queue on so
   two of them never wipe one database at the same time.
 - `src/lib/server/http.js` — `json` / `jsonError`, the one response shape the API
-  uses, and `jsonMutationGuard`, the cross-site check every JSON mutation passes
-  through; `src/lib/server/meta.js` — the `/api/v1/meta` payload and this process'
-  start time.
+  uses, `readJson` and `apiHandler` (an unplanned throw is still that shape), and
+  `jsonMutationGuard`, the cross-site check every JSON mutation passes through;
+  `src/lib/server/meta.js` — the `/api/v1/meta` payload and this process' start time.
+- `src/lib/server/youtube.js` — the Data API calls, with the installation's key and
+  a typed `YouTubeApiError`; the browser never talks to Google.
+- `src/lib/server/library/` — the library API in three layers: `store.js` is the
+  only module that knows the tables exist and **every one of its functions takes a
+  `user_id` and puts it in the `where`**; `service.js` is import, import-json,
+  export and removal with the HTTP left out; `http.js` is the body validation and
+  the YouTube-reason-to-status mapping, both pure; `session.js` turns the hook's
+  promise of a session into a check. `library.db.test.js` drives `service.js` and
+  `store.js` against a real Postgres, including a second account trying every route
+  into the first one's data.
 - `src/lib/server/auth/` — accounts, one module per noun: `password.js` (Argon2id,
   and the decoy hash that makes an unknown address cost the same as a wrong
   password), `tokens.js` (32 random bytes out, a SHA-256 into the database),

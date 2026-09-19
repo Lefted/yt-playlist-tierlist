@@ -1,9 +1,15 @@
 /**
  * Turns a failed import into something a user can act on.
  *
- * `YouTubeApiError.reason` is the machine-readable half of the API module; this is
- * the human half. It lives here, next to the dialog that shows it, so nothing in
- * the app ever falls back to `alert(error.message)`.
+ * The machine-readable half is the `code` of `{ error: { code, message } }` — which
+ * for an import is one of `ApiErrorReason`, the vocabulary the server's YouTube
+ * module speaks (`src/lib/server/youtube.js`). This is the human half, and it lives
+ * here, next to the dialog that shows it, so nothing in the app ever falls back to
+ * `alert(error.message)`.
+ *
+ * Anything not listed here falls through to the server's own sentence, which is why
+ * codes such as `invalid_export` or `playlist_not_found` need no entry: they arrive
+ * with a message written for this exact situation.
  */
 
 /** @typedef {import('$lib/youtube/api.js').ApiErrorReason} ApiErrorReason */
@@ -11,9 +17,13 @@
 /** @type {Record<string, string>} */
 const BY_REASON = {
 	keyInvalid:
-		'YouTube rejected this API key. Check that you copied it completely and that "YouTube Data API v3" is enabled for the project the key belongs to.',
+		'YouTube rejected this server\'s API key. Ask whoever runs this installation to check YOUTUBE_API_KEY and that "YouTube Data API v3" is enabled for the project it belongs to.',
+	keyMissing:
+		'This server has no YouTube API key configured, so it cannot import playlists. Ask whoever runs it to set YOUTUBE_API_KEY.',
+	offline:
+		'The server could not be reached. Check your connection — importing needs to be online — and try again.',
 	quotaExceeded:
-		'This API key is out of quota for today. The quota resets at midnight Pacific Time — until then, use a key from another project.',
+		'This installation is out of YouTube quota for today. The quota resets at midnight Pacific Time.',
 	playlistNotFound:
 		'No playlist found for that link or id. Private playlists are invisible to the API; the playlist has to be public or unlisted.',
 	network:
@@ -25,12 +35,15 @@ const BY_REASON = {
 const FALLBACK = 'The import failed for an unknown reason. Please try again.';
 
 /**
- * @param {unknown} error - A {@link YouTubeApiError}, a plain `Error` (e.g. from
- *   `library.importJson`) or anything else that was thrown.
+ * @param {unknown} error - An `ApiError` from `$lib/api.js`, a plain `Error`, or
+ *   anything else that was thrown.
  * @returns {string} A complete sentence, never empty.
  */
 export function importErrorMessage(error) {
-	const reason = /** @type {{ reason?: unknown }} */ (error ?? {}).reason;
+	const source = /** @type {{ code?: unknown, reason?: unknown }} */ (error ?? {});
+	// `reason` as well as `code`, because the two are the same vocabulary: the server
+	// throws a `YouTubeApiError` carrying a `reason` and answers with it as a `code`.
+	const reason = source.code ?? source.reason;
 	if (typeof reason === 'string' && reason in BY_REASON) return BY_REASON[reason];
 
 	const message = /** @type {{ message?: unknown }} */ (error ?? {}).message;

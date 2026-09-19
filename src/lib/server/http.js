@@ -50,6 +50,55 @@ export function jsonError(status, code, message) {
 	return json(body, status);
 }
 
+/**
+ * The JSON body of a request, or `undefined` when there is none to be had.
+ *
+ * `Request.json()` throws on an empty or malformed body, and an endpoint that lets
+ * that through answers with SvelteKit's own 500 instead of this envelope. Callers
+ * validate the shape themselves — this only promises that something was parsed.
+ *
+ * @param {Request} request
+ * @returns {Promise<unknown>} `undefined` when the body was empty or not JSON.
+ */
+export async function readJson(request) {
+	try {
+		return await request.json();
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Wrap an API handler so an unexpected throw is still an `{ error: … }` answer.
+ *
+ * Everything below is written to return failures rather than throw them; this is
+ * for the ones nobody planned — a dropped database connection in the middle of a
+ * statement, a bug. Without it SvelteKit answers with its own JSON shape, and a
+ * client that only knows this envelope reads that as an unexplained failure.
+ *
+ * @template {(event: any) => Promise<Response>} H
+ * @param {H} handler
+ * @returns {H}
+ */
+export function apiHandler(handler) {
+	return /** @type {H} */ (
+		async (/** @type {any} */ event) => {
+			try {
+				return await handler(event);
+			} catch (error) {
+				// A redirect (or any other SvelteKit control-flow throw) is not a failure.
+				if (error instanceof Response) return error;
+				console.error(`[api] ${event?.request?.method} ${event?.url?.pathname} failed:`, error);
+				return jsonError(
+					500,
+					'internal_error',
+					'Something went wrong on the server. Try again in a moment.'
+				);
+			}
+		}
+	);
+}
+
 /** Methods that cannot change anything, and so need no cross-site protection. */
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 

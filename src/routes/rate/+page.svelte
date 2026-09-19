@@ -11,6 +11,8 @@
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
 
+	import * as Card from '$lib/components/ui/card/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
 	import Player from '$lib/components/Player.svelte';
 	import EmptyLibrary from '$lib/components/rate/EmptyLibrary.svelte';
 	import NowPlaying from '$lib/components/rate/NowPlaying.svelte';
@@ -66,9 +68,20 @@
 	// before `jumpTo`, which pins its video past that filter.
 	const initial = parseRateParams(page.url.searchParams);
 	session.setFilter({ tiers: initial.tiers, includeUnrated: initial.includeUnrated });
-	if (initial.videoId && !session.jumpTo(initial.videoId)) {
-		toast.warning('That video is not in the active playlist.');
-	}
+
+	/** Whether `?v=` has been acted on; it is a starting point and gets exactly one go. */
+	let jumped = false;
+
+	// …but only once the library is actually here. A cold load of `/rate?v=abc` reaches
+	// this component while the library is still being read, and jumping then would
+	// announce that the video is missing from a playlist nobody has yet.
+	$effect(() => {
+		if (jumped || library.loading) return;
+		jumped = true;
+		if (initial.videoId && !session.jumpTo(initial.videoId)) {
+			toast.warning('That video is not in the active playlist.');
+		}
+	});
 
 	/**
 	 * `?v=` is a starting point, consumed above. Drop it once the router is up, so a
@@ -393,7 +406,25 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-{#if !library.activePlaylist}
+{#if library.loading}
+	<div class="mx-auto flex w-full max-w-xl flex-1 items-center p-4">
+		<div class="bg-muted h-48 w-full animate-pulse rounded-xl" aria-busy="true">
+			<span class="sr-only" aria-live="polite">Loading your library…</span>
+		</div>
+	</div>
+{:else if library.error}
+	<div class="mx-auto flex w-full max-w-xl flex-1 items-center p-4">
+		<Card.Root class="w-full">
+			<Card.Header>
+				<Card.Title>Your library could not be loaded</Card.Title>
+				<Card.Description>{library.error}</Card.Description>
+			</Card.Header>
+			<Card.Content>
+				<Button onclick={() => library.reload()}>Try again</Button>
+			</Card.Content>
+		</Card.Root>
+	</div>
+{:else if !library.activePlaylist}
 	<EmptyLibrary />
 {:else if !current}
 	<SessionSummary />

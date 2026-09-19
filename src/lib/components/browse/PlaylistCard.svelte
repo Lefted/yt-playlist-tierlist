@@ -8,6 +8,7 @@
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Download from '@lucide/svelte/icons/download';
+	import HardDriveDownload from '@lucide/svelte/icons/hard-drive-download';
 	import Upload from '@lucide/svelte/icons/upload';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 
@@ -21,6 +22,7 @@
 	import { exportFileName, formatDate } from '$lib/format.js';
 	import { playlistUrl } from '$lib/youtube/urls.js';
 	import JsonFileInput from './JsonFileInput.svelte';
+	import { hasLocalLibrary, importLocalLibrary } from './local-import.js';
 	import Notice from './Notice.svelte';
 
 	/**
@@ -37,6 +39,12 @@
 	let confirmRemove = $state(false);
 	/** @type {import('./json-file.js').Notice | null} */
 	let notice = $state(null);
+
+	/**
+	 * Whether this browser still carries the pre-accounts library. Read once — the
+	 * menu item below is the only thing that changes it, and it reports that itself.
+	 */
+	let localLibraryPresent = $state(hasLocalLibrary());
 
 	// Empty for the local `legacy-import` collection: YouTube never had that
 	// playlist, so neither the link nor a refresh could work.
@@ -72,6 +80,18 @@
 			// the click returns, and revoking here would abort the download.
 			if (href) setTimeout(() => URL.revokeObjectURL(href), 60_000);
 		}
+	}
+
+	/**
+	 * The same one-time migration the empty state offers, for an account that already
+	 * has playlists and therefore never sees that offer.
+	 *
+	 * @returns {Promise<void>}
+	 */
+	async function importLocal() {
+		notice = { tone: 'ok', text: 'Importing this device’s stored tier list…' };
+		notice = await importLocalLibrary();
+		localLibraryPresent = hasLocalLibrary();
 	}
 
 	/** @returns {void} */
@@ -114,6 +134,12 @@
 						<Upload class="size-4" />
 						Import JSON
 					</DropdownMenu.Item>
+					{#if localLibraryPresent}
+						<DropdownMenu.Item onSelect={importLocal}>
+							<HardDriveDownload class="size-4" />
+							Import from this device
+						</DropdownMenu.Item>
+					{/if}
 					<DropdownMenu.Separator />
 					<DropdownMenu.Item variant="destructive" onSelect={() => (confirmRemove = true)}>
 						<Trash2 class="size-4" />
@@ -188,8 +214,8 @@
 			<AlertDialog.Title>Remove "{playlist.title || playlist.id}"?</AlertDialog.Title>
 			<AlertDialog.Description>
 				This deletes the playlist and all {playlist.videos.filter((video) => video.rating !== null)
-					.length} ratings it holds from this browser. Export a JSON backup first if you want to keep
-				them.
+					.length} ratings it holds from your account, on every device. Export a JSON backup first if
+				you want to keep them.
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>

@@ -1,17 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	createLocalStorageStub,
+	libraryPayload,
 	makePlaylist,
 	makeVideo,
-	storedLibrary
+	stubApi
 } from '../testing/fixtures.js';
+
+/** The session drives the library, which announces failed writes; none fail here. */
+vi.mock('../notify.js', () => ({ notifyError: vi.fn() }));
 
 /**
  * A playlist with one unrated, one S-rated, one unavailable and one F-rated video.
- * @returns {Record<string, string>}
+ * @returns {ReturnType<typeof libraryPayload>}
  */
 function seed() {
-	return storedLibrary([
+	return libraryPayload([
 		makePlaylist({
 			id: 'PL1',
 			videos: [
@@ -33,16 +37,20 @@ let session;
 let settings;
 
 /**
- * Fresh library + settings + session on top of the seeded storage.
- * @param {Record<string, string>} [initial]
+ * Fresh library + settings + session, with the library read from a stubbed API and
+ * every write accepted.
+ *
+ * @param {ReturnType<typeof libraryPayload>} [payload]
  * @returns {Promise<void>}
  */
-async function boot(initial = seed()) {
+async function boot(payload = seed()) {
 	vi.resetModules();
-	vi.stubGlobal('localStorage', createLocalStorageStub(initial));
+	vi.stubGlobal('localStorage', createLocalStorageStub());
+	stubApi({ 'GET /library': payload, '*': {} });
 	({ library } = await import('./library.svelte.js'));
 	({ settings } = await import('./settings.svelte.js'));
 	({ session } = await import('./session.svelte.js'));
+	await library.ensureLoaded('user-1');
 }
 
 /** @returns {string[]} */
@@ -122,7 +130,7 @@ describe('queue', () => {
 	});
 
 	it('is empty without an active playlist', async () => {
-		await boot({});
+		await boot(libraryPayload([]));
 		expect(session.queue).toEqual([]);
 		expect(session.currentVideo).toBeNull();
 		expect(session.hasNext).toBe(false);
@@ -207,7 +215,7 @@ describe('rateCurrent', () => {
 	});
 
 	it('does nothing on an empty queue', async () => {
-		await boot({});
+		await boot(libraryPayload([]));
 		expect(session.rateCurrent('A')).toBe(false);
 	});
 
@@ -349,7 +357,7 @@ describe('undo', () => {
 
 	it('keeps at most 50 steps', async () => {
 		await boot(
-			storedLibrary([
+			libraryPayload([
 				makePlaylist({
 					id: 'PL1',
 					videos: Array.from({ length: 60 }, (_, index) =>
@@ -372,7 +380,7 @@ describe('undo', () => {
 
 	it('does not reach across a playlist switch', async () => {
 		await boot(
-			storedLibrary([
+			libraryPayload([
 				makePlaylist({ id: 'PL1', videos: [makeVideo({ id: 'v1' })] }),
 				makePlaylist({ id: 'PL2', videos: [makeVideo({ id: 'w1' })] })
 			])

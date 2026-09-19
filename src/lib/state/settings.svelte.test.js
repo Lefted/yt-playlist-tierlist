@@ -29,10 +29,9 @@ afterEach(() => {
 });
 
 describe('defaults', () => {
-	it('starts with an empty key, skipping rated videos and auto-advancing', async () => {
+	it('starts by skipping rated videos and auto-advancing', async () => {
 		const { settings } = await boot();
 		expect(settings.toJSON()).toEqual({
-			apiKey: '',
 			skipRated: true,
 			autoAdvance: true,
 			fullscreenOnPlay: false,
@@ -46,12 +45,10 @@ describe('defaults', () => {
 describe('persistence', () => {
 	it('writes through on every change', async () => {
 		const { settings } = await boot();
-		settings.apiKey = 'AIza-test';
 		settings.skipRated = false;
 
 		expect(JSON.parse(/** @type {string} */ (store.entries.get(KEY)))).toEqual({
 			version: 1,
-			apiKey: 'AIza-test',
 			skipRated: false,
 			autoAdvance: true,
 			fullscreenOnPlay: false,
@@ -75,8 +72,9 @@ describe('persistence', () => {
 			})
 		});
 
+		// The stored `apiKey` is gone from the shape: the YouTube key is the server's
+		// since #17, and a stale one must not come back as a setting.
 		expect(settings.toJSON()).toEqual({
-			apiKey: 'stored',
 			skipRated: false,
 			autoAdvance: false,
 			fullscreenOnPlay: true,
@@ -95,18 +93,11 @@ describe('persistence', () => {
 		const { settings } = await boot({
 			[KEY]: JSON.stringify({ apiKey: 42, skipRated: 'nope', extra: true })
 		});
-		expect(settings.apiKey).toBe('');
 		expect(settings.skipRated).toBe(true);
 	});
 });
 
 describe('coercion', () => {
-	it('trims the API key', async () => {
-		const { settings } = await boot();
-		settings.apiKey = '  AIza-test  ';
-		expect(settings.apiKey).toBe('AIza-test');
-	});
-
 	it('coerces the flags to booleans', async () => {
 		const { settings } = await boot();
 		settings.autoAdvance = /** @type {any} */ (0);

@@ -36,7 +36,7 @@ export function takeFile(event) {
  */
 export async function applyLibraryFile(file) {
 	try {
-		const summary = library.importJson(await file.text());
+		const summary = await library.importJson(await file.text());
 		return {
 			tone: 'ok',
 			text: `Imported ${summary.videos} video(s) from ${summary.playlists} playlist(s); ${summary.ratingsApplied} rating(s) applied.`

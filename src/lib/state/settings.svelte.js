@@ -1,5 +1,11 @@
 /**
- * User settings, persisted under `ytpt:v1:settings`.
+ * Device preferences, persisted under `ytpt:v1:settings`.
+ *
+ * Deliberately local and not per account (#14): which keys you like and whether a
+ * video should go fullscreen are properties of the machine in front of you, not of
+ * the person logged into it. The library went the other way — it lives in Postgres
+ * since #17. An `apiKey` left here by an older version is ignored: the YouTube key is
+ * the server's now.
  *
  * Every field is an accessor whose setter writes through to `localStorage`, so
  * `settings.skipRated = false` (and `bind:checked={settings.skipRated}`) persists
@@ -22,7 +28,6 @@ const STORAGE_VERSION = 1;
 
 /** @type {Settings} */
 const DEFAULTS = {
-	apiKey: '',
 	skipRated: true,
 	autoAdvance: true,
 	fullscreenOnPlay: false,
@@ -32,7 +37,6 @@ const DEFAULTS = {
 };
 
 class SettingsStore {
-	#apiKey = $state(DEFAULTS.apiKey);
 	#skipRated = $state(DEFAULTS.skipRated);
 	#autoAdvance = $state(DEFAULTS.autoAdvance);
 	#fullscreenOnPlay = $state(DEFAULTS.fullscreenOnPlay);
@@ -44,16 +48,6 @@ class SettingsStore {
 
 	constructor() {
 		this.#apply(load(STORAGE_KEY, DEFAULTS));
-	}
-
-	/** @returns {string} Personal YouTube Data API key; `''` until the user supplies one. */
-	get apiKey() {
-		return this.#apiKey;
-	}
-
-	set apiKey(value) {
-		this.#apiKey = typeof value === 'string' ? value.trim() : '';
-		this.#persist();
 	}
 
 	/** @returns {boolean} Leave already rated videos out of the rating queue. */
@@ -135,7 +129,6 @@ class SettingsStore {
 	 */
 	toJSON() {
 		return {
-			apiKey: this.#apiKey,
 			skipRated: this.#skipRated,
 			autoAdvance: this.#autoAdvance,
 			fullscreenOnPlay: this.#fullscreenOnPlay,
@@ -152,7 +145,6 @@ class SettingsStore {
 	#apply(raw) {
 		const stored =
 			raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
-		this.#apiKey = typeof stored.apiKey === 'string' ? stored.apiKey : DEFAULTS.apiKey;
 		this.#skipRated = typeof stored.skipRated === 'boolean' ? stored.skipRated : DEFAULTS.skipRated;
 		this.#autoAdvance =
 			typeof stored.autoAdvance === 'boolean' ? stored.autoAdvance : DEFAULTS.autoAdvance;

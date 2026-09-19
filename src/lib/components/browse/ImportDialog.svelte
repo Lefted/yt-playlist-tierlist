@@ -1,7 +1,11 @@
 <script>
 	/**
-	 * Import (or refresh) a playlist: API key, playlist link, progress, and a real
-	 * error message for every `YouTubeApiError.reason`.
+	 * Import (or refresh) a playlist: a link, a spinner, and a real error message for
+	 * every code the server can answer with.
+	 *
+	 * The API key field is gone since #17 — the server holds one key for the whole
+	 * installation and does the fetching, so there is nothing personal to type here
+	 * and nothing to show progress for: the answer arrives when the import is done.
 	 *
 	 * Full-screen on mobile, a centred dialog from `sm` up.
 	 */
@@ -12,12 +16,9 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
-	import { Progress } from '$lib/components/ui/progress/index.js';
 
 	import { library } from '$lib/state/library.svelte.js';
-	import { settings } from '$lib/state/settings.svelte.js';
 	import { parsePlaylistInput } from '$lib/youtube/api.js';
-	import { percentOf } from '$lib/utils.js';
 	import { importErrorMessage } from './errors.js';
 	import Notice from './Notice.svelte';
 
@@ -30,27 +31,21 @@
 	/** @type {Props} */
 	let { open = $bindable(false), initialInput = '' } = $props();
 
-	let apiKey = $state(settings.apiKey);
 	let input = $state('');
 	let busy = $state(false);
-	/** @type {import('$lib/youtube/api.js').ImportProgress | null} */
-	let progress = $state(null);
 	/** @type {string} */
 	let error = $state('');
 	/** Set once the user submitted, so nothing is flagged red while they are still typing. */
 	let submitted = $state(false);
 
-	// Reset whenever the dialog is (re)opened: the key comes from settings, the
-	// playlist field from whatever opened it (empty, or the playlist to refresh).
-	// `untrack` keeps `open` the only trigger — submitting writes `settings.apiKey`,
-	// and a reset in the middle of an import would wipe the form under the user.
+	// Reset whenever the dialog is (re)opened; the playlist field comes from whatever
+	// opened it (empty, or the playlist to refresh). `untrack` keeps `open` the only
+	// trigger, so nothing can wipe the form in the middle of an import.
 	$effect(() => {
 		if (!open) return;
 		untrack(() => {
-			apiKey = settings.apiKey;
 			input = initialInput;
 			error = '';
-			progress = null;
 			submitted = false;
 		});
 	});
@@ -61,13 +56,6 @@
 		playlistId === null ? null : (library.playlists.find((p) => p.id === playlistId) ?? null)
 	);
 
-	const progressPercent = $derived(progress ? percentOf(progress.loaded, progress.total) : 0);
-	const progressLabel = $derived(
-		progress
-			? `${progress.phase === 'items' ? 'Loading videos' : 'Loading durations'} ${progress.loaded} of ${progress.total || '?'}`
-			: 'Contacting YouTube…'
-	);
-
 	/**
 	 * @returns {Promise<void>}
 	 */
@@ -75,10 +63,6 @@
 		submitted = true;
 		error = '';
 
-		if (apiKey.trim() === '') {
-			error = 'Enter your YouTube Data API key first.';
-			return;
-		}
 		if (playlistId === null) {
 			error =
 				'Paste a playlist link (any YouTube URL with "list=") or a playlist id starting with PL, UU, FL or LL.';
@@ -86,22 +70,13 @@
 		}
 
 		busy = true;
-		progress = null;
-		// Persist the key before the request: a quota error two minutes later should
-		// not cost the user the key they just typed.
-		settings.apiKey = apiKey;
 		try {
-			await library.importPlaylist(settings.apiKey, input, {
-				onProgress: (next) => {
-					progress = next;
-				}
-			});
+			await library.importPlaylist(input);
 			open = false;
 		} catch (cause) {
 			error = importErrorMessage(cause);
 		} finally {
 			busy = false;
-			progress = null;
 		}
 	}
 </script>
@@ -116,7 +91,8 @@
 		<Dialog.Header>
 			<Dialog.Title>{known ? 'Refresh playlist' : 'Import a playlist'}</Dialog.Title>
 			<Dialog.Description>
-				Videos are read straight from YouTube with your own API key. Nothing leaves this browser.
+				The server reads the playlist from YouTube and stores it with your account, so it is there
+				on every device you sign in on.
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -127,29 +103,6 @@
 				submit();
 			}}
 		>
-			<div class="grid gap-1.5">
-				<Label for="import-api-key">YouTube Data API key</Label>
-				<Input
-					id="import-api-key"
-					type="password"
-					autocomplete="off"
-					spellcheck="false"
-					placeholder="AIza…"
-					disabled={busy}
-					bind:value={apiKey}
-				/>
-				<p class="text-muted-foreground text-xs">
-					Create one in the
-					<a
-						class="underline underline-offset-4"
-						href="https://console.cloud.google.com/apis/credentials"
-						target="_blank"
-						rel="noreferrer">Google Cloud console</a
-					>, enable "YouTube Data API v3" for it, and paste it here. It is stored in this browser
-					only.
-				</p>
-			</div>
-
 			<div class="grid gap-1.5">
 				<Label for="import-playlist">Playlist URL or id</Label>
 				<Input
@@ -181,13 +134,10 @@
 			{/if}
 
 			{#if busy}
-				<div class="grid gap-2" aria-live="polite">
-					<Progress value={progressPercent} aria-label={progressLabel} />
-					<p class="text-muted-foreground flex items-center gap-2 text-xs">
-						<Loader class="size-3.5 animate-spin" />
-						{progressLabel}
-					</p>
-				</div>
+				<p class="text-muted-foreground flex items-center gap-2 text-xs" aria-live="polite">
+					<Loader class="size-3.5 animate-spin" />
+					Reading the playlist from YouTube — a long one takes a moment.
+				</p>
 			{/if}
 
 			{#if error}

@@ -81,6 +81,16 @@ export default defineConfig({
 				navigateFallbackDenylist: NO_CACHED_SHELL,
 				runtimeCaching: [
 					{
+						// The library API, stated rather than left to the default, because the
+						// default is what a future rule could quietly change. Nothing under
+						// `/api/` may be answered from a cache: a stale `GET /library` would
+						// show ratings that are no longer there, and a queued write would
+						// apply a tier the user has since taken back. Offline means the
+						// optimistic update rolls back and says so (#17).
+						urlPattern: /\/api\/v1\//,
+						handler: 'NetworkOnly'
+					},
+					{
 						// YouTube thumbnails are immutable per video and dominate the Browse page.
 						urlPattern: /^https:\/\/i\.ytimg\.com\/.*/i,
 						handler: 'CacheFirst',

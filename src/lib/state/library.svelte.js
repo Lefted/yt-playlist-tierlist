@@ -1,59 +1,56 @@
 /**
- * The library: every imported playlist plus its ratings, persisted under
- * `ytpt:v1:library`.
+ * The library: every imported playlist plus its ratings, as the browser sees it.
  *
- * Persistence is explicit — every mutating method writes through after it is done,
- * so no component lifecycle or `$effect` is needed to keep storage in sync.
+ * Since #17 the truth is in Postgres, one library per account, and this class is the
+ * copy the pages render. `localStorage` holds no library any more — only device
+ * preferences (`settings`) stay local.
+ *
+ * **Everything the user does is applied here first and sent afterwards.** Rating a
+ * video while watching it has to feel like pressing a key, not like submitting a
+ * form, so `rate`, `markUnavailable`, `shuffle`, `setActive` and `removePlaylist`
+ * keep the synchronous, boolean-returning signatures the Rate page and the undo
+ * stack have always called — the request goes out behind them, and a refusal puts
+ * the old value back and says so (`$lib/notify.js`). The operations that genuinely
+ * cannot be guessed at — importing from YouTube, importing a backup — are `async` and
+ * throw, because their result is the point.
+ *
+ * Reads that fail leave `error` set and `playlists` empty; the pages render `loading`
+ * and `error` rather than an empty library that looks like a lost one.
  */
 
 import { createRatingCounts, isRating, RATING_ORDER } from '../types.js';
-import {
-	countNewRatings,
-	mergePlaylist,
-	normalizePlaylist,
-	normalizeVideo,
-	orderedVideos,
-	reconcileOrder
-} from '../playlist.js';
-import { load, save } from '../storage.js';
-import {
-	fetchPlaylistMeta,
-	fetchPlaylistVideos,
-	parsePlaylistInput,
-	YouTubeApiError
-} from '../youtube/api.js';
+import { normalizePlaylist, orderedVideos, reconcileOrder } from '../playlist.js';
+import { serializeExport } from '../library-io.js';
+import { apiFetch } from '../api.js';
+import { notifyError } from '../notify.js';
 
 /** @typedef {import('../types.js').Playlist} Playlist */
 /** @typedef {import('../types.js').Video} Video */
 /** @typedef {import('../types.js').Rating} Rating */
 /** @typedef {import('../types.js').RatingCounts} RatingCounts */
-/** @typedef {import('../youtube/api.js').ImportProgress} ImportProgress */
-
-/**
- * Result of {@link Library.importJson}.
- * @typedef {Object} ImportSummary
- * @property {number} playlists - Playlists created or merged.
- * @property {number} videos - Videos contained in the import.
- * @property {number} ratingsApplied - Ratings that filled a previously unrated video.
- */
-
-const STORAGE_KEY = 'library';
-/**
- * Written into every persisted payload. Nothing reads it yet - it is what lets a
- * future shape change migrate instead of discarding the user's ratings, and both
- * loaders already tolerate unknown and missing fields.
- */
-const STORAGE_VERSION = 1;
-
-/** Playlist that collects ratings from a legacy export we cannot match to a playlist. */
-export const LEGACY_PLAYLIST_ID = 'legacy-import';
+/** @typedef {import('../library-io.js').ImportSummary} ImportSummary */
 
 class Library {
 	/** @type {Playlist[]} */
 	playlists = $state([]);
 
+	/** @type {boolean} Whether the first read of this account's library is still running. */
+	loading = $state(false);
+
+	/**
+	 * @type {string|null} Why the library could not be read, as a sentence. Failed
+	 * *writes* do not land here — they are rolled back and announced instead.
+	 */
+	error = $state(null);
+
 	/** @type {string|null} */
 	#activePlaylistId = $state(null);
+
+	/** @type {string|null} Account the current contents belong to. */
+	#loadedFor = null;
+
+	/** @type {Promise<void>|null} The read in flight, so two callers share one. */
+	#pending = null;
 
 	/** @type {Playlist|null} The playlist the UI currently works on. */
 	activePlaylist = $derived(
@@ -84,59 +81,85 @@ class Library {
 	/** @type {number} Playable videos still waiting for a rating. */
 	unratedCount = $derived(this.availableCount - this.ratedCount);
 
-	constructor() {
-		this.#hydrate();
-	}
-
 	/** @returns {string|null} Id of the active playlist. Change it via {@link setActive}. */
 	get activePlaylistId() {
 		return this.#activePlaylistId;
 	}
 
+	/** @returns {boolean} Whether this account has nothing imported (and we know it). */
+	get isEmpty() {
+		return !this.loading && this.error === null && this.playlists.length === 0;
+	}
+
+	/**
+	 * Read this account's library, once.
+	 *
+	 * Called from the root layout load on startup and again after every login or
+	 * logout. A second call for the same account is free; a call for another account
+	 * reads again, because the two have nothing to do with each other.
+	 *
+	 * @param {string} userId
+	 * @returns {Promise<void>} Resolves when the library is there — or when the
+	 *   attempt has failed and `error` says why. It never rejects: a page that cannot
+	 *   read the library still has to render.
+	 */
+	ensureLoaded(userId) {
+		if (this.#loadedFor === userId && this.error === null) return Promise.resolve();
+		if (this.#pending && this.#loadedFor === userId) return this.#pending;
+
+		this.#loadedFor = userId;
+		this.#pending = this.#load();
+		return this.#pending;
+	}
+
+	/**
+	 * Read the library again, whatever state it is in — the way back from a failed
+	 * read, and what the pages' "Try again" offers.
+	 *
+	 * @returns {Promise<void>}
+	 */
+	reload() {
+		this.#pending = this.#load();
+		return this.#pending;
+	}
+
+	/**
+	 * Forget everything without touching the server — what a logout leaves behind.
+	 *
+	 * Also the reset seam for the suites that exercise the singleton in place instead
+	 * of booting a fresh module.
+	 *
+	 * @returns {void}
+	 */
+	clear() {
+		this.playlists = [];
+		this.#activePlaylistId = null;
+		this.#loadedFor = null;
+		this.#pending = null;
+		this.loading = false;
+		this.error = null;
+	}
+
 	/**
 	 * Import a playlist from YouTube and make it active.
 	 *
-	 * An existing playlist with the same id is merged (see {@link mergePlaylist}), so
-	 * re-importing is also the way to refresh a playlist without losing ratings.
+	 * The server holds the API key and does the fetching (#17); re-importing an
+	 * existing playlist is still the refresh path, and still keeps every rating.
 	 *
-	 * @param {string} apiKey
 	 * @param {string} input - Playlist id or any YouTube URL carrying `list=`.
-	 * @param {{ onProgress?: (progress: ImportProgress) => void }} [options]
 	 * @returns {Promise<Playlist>} The merged playlist.
-	 * @throws {YouTubeApiError}
+	 * @throws {import('../api.js').ApiError} With the code the import dialog renders.
 	 */
-	async importPlaylist(apiKey, input, options = {}) {
-		const key = typeof apiKey === 'string' ? apiKey.trim() : '';
-		if (key === '') {
-			throw new YouTubeApiError('No YouTube API key configured.', 'keyInvalid');
+	async importPlaylist(input) {
+		const result = await apiFetch('/playlists/import', { method: 'POST', body: { input } });
+		const playlist = normalizePlaylist(result?.playlist);
+		if (!playlist) {
+			throw new Error('The server imported the playlist but described it in a way we cannot read.');
 		}
 
-		const playlistId = parsePlaylistInput(input);
-		if (!playlistId) {
-			throw new YouTubeApiError(
-				'That is neither a playlist id nor a YouTube URL containing "list=".',
-				'playlistNotFound'
-			);
-		}
-
-		const meta = await fetchPlaylistMeta(key, playlistId);
-		const videos = await fetchPlaylistVideos(key, playlistId, options.onProgress);
-		const now = new Date().toISOString();
-
-		const merged = this.#upsert(
-			{
-				...meta,
-				importedAt: now,
-				updatedAt: now,
-				videos,
-				order: videos.map((video) => video.id)
-			},
-			now
-		);
-
-		this.#activePlaylistId = merged.id;
-		this.#persist();
-		return merged;
+		this.#replacePlaylist(playlist);
+		this.#activePlaylistId = result?.activePlaylistId ?? playlist.id;
+		return playlist;
 	}
 
 	/**
@@ -147,11 +170,22 @@ class Library {
 		const index = this.playlists.findIndex((playlist) => playlist.id === id);
 		if (index === -1) return false;
 
+		const removed = $state.snapshot(this.playlists[index]);
+		const previousActive = this.#activePlaylistId;
+
 		this.playlists.splice(index, 1);
 		if (this.#activePlaylistId === id) {
 			this.#activePlaylistId = this.playlists[0]?.id ?? null;
 		}
-		this.#persist();
+
+		this.#send(
+			apiFetch(`/playlists/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+			() => {
+				this.playlists.splice(index, 0, /** @type {Playlist} */ (removed));
+				this.#activePlaylistId = previousActive;
+			},
+			'The playlist could not be removed.'
+		);
 		return true;
 	}
 
@@ -160,14 +194,19 @@ class Library {
 	 * @returns {boolean} `false` when there is no playlist with that id.
 	 */
 	setActive(id) {
-		if (id === null) {
-			this.#activePlaylistId = null;
-			this.#persist();
-			return true;
-		}
-		if (!this.playlists.some((playlist) => playlist.id === id)) return false;
+		if (id !== null && !this.playlists.some((playlist) => playlist.id === id)) return false;
+
+		const previous = this.#activePlaylistId;
+		if (previous === id) return true;
 		this.#activePlaylistId = id;
-		this.#persist();
+
+		this.#send(
+			apiFetch('/library/active', { method: 'PUT', body: { playlistId: id } }),
+			() => {
+				this.#activePlaylistId = previous;
+			},
+			'The playlist could not be switched.'
+		);
 		return true;
 	}
 
@@ -183,9 +222,7 @@ class Library {
 		if (rating !== null && !isRating(rating)) {
 			throw new TypeError(`"${rating}" is not one of ${RATING_ORDER.join('/')} or null.`);
 		}
-		return this.#updateVideo(videoId, (video) => {
-			video.rating = rating;
-		});
+		return this.#patchVideo(videoId, { rating }, 'That rating could not be saved.');
 	}
 
 	/**
@@ -196,9 +233,11 @@ class Library {
 	 * @returns {boolean} `false` when the active playlist has no such video.
 	 */
 	markUnavailable(videoId) {
-		return this.#updateVideo(videoId, (video) => {
-			video.unavailable = true;
-		});
+		return this.#patchVideo(
+			videoId,
+			{ unavailable: true },
+			'That video could not be flagged as unavailable.'
+		);
 	}
 
 	/**
@@ -209,14 +248,12 @@ class Library {
 	 * @returns {boolean} `false` when the active playlist has no such video.
 	 */
 	markAvailable(videoId) {
-		return this.#updateVideo(videoId, (video) => {
-			video.unavailable = false;
-		});
+		return this.#patchVideo(videoId, { unavailable: false }, 'That video could not be restored.');
 	}
 
 	/**
 	 * Shuffle the playback order of the active playlist (Fisher-Yates). The order is
-	 * persisted, so it survives a reload.
+	 * stored, so it survives a reload and follows the account to another device.
 	 *
 	 * @param {() => number} [random] - Injectable source of randomness, for tests.
 	 * @returns {boolean} `false` when there is no active playlist.
@@ -230,10 +267,7 @@ class Library {
 			const j = Math.floor(random() * (i + 1));
 			[order[i], order[j]] = [order[j], order[i]];
 		}
-		playlist.order = order;
-		playlist.updatedAt = new Date().toISOString();
-		this.#persist();
-		return true;
+		return this.#setOrder(playlist, order);
 	}
 
 	/**
@@ -243,229 +277,203 @@ class Library {
 	resetOrder() {
 		const playlist = this.activePlaylist;
 		if (!playlist) return false;
-
-		playlist.order = reconcileOrder([], playlist.videos);
-		playlist.updatedAt = new Date().toISOString();
-		this.#persist();
-		return true;
+		return this.#setOrder(playlist, reconcileOrder([], playlist.videos));
 	}
 
 	/**
 	 * Serialise the whole library for download.
+	 *
+	 * Built from what is on screen rather than fetched, so the download starts in the
+	 * same click that asked for it. `GET /api/v1/library/export` produces the same
+	 * file from the same module for anyone who would rather use `curl`.
+	 *
 	 * @returns {string} Pretty-printed JSON.
 	 */
 	exportJson() {
-		return JSON.stringify(
-			{
-				version: STORAGE_VERSION,
-				exportedAt: new Date().toISOString(),
-				playlists: $state.snapshot(this.playlists)
-			},
-			null,
-			2
+		return serializeExport($state.snapshot(this.playlists), new Date().toISOString());
+	}
+
+	/**
+	 * Merge an exported library back in.
+	 *
+	 * The server does the merging — it is the same pure module either way — and
+	 * answers with the whole library, so what lands here is what was stored rather
+	 * than what we hoped would be.
+	 *
+	 * @param {string} text - An export file: the current format, or the legacy array.
+	 * @returns {Promise<ImportSummary>}
+	 * @throws {import('../api.js').ApiError} On an unreadable or rejected payload.
+	 */
+	async importJson(text) {
+		const result = await apiFetch('/library/import-json', {
+			method: 'POST',
+			body: parseJsonText(text)
+		});
+		this.#apply(result?.library);
+		return /** @type {ImportSummary} */ (
+			result?.summary ?? { playlists: 0, videos: 0, ratingsApplied: 0 }
 		);
 	}
 
 	/**
-	 * Merge an exported library back in. Accepts both the current format
-	 * (`{ version, exportedAt, playlists }`) and the legacy prototype format (a bare
-	 * array of `{ videoId, title, rating }`), whose ratings are applied to matching
-	 * videos of already imported playlists.
-	 *
-	 * @param {string} text
-	 * @returns {ImportSummary}
-	 * @throws {Error} On invalid JSON or an unrecognised shape.
+	 * @returns {Promise<void>}
 	 */
-	importJson(text) {
-		/** @type {unknown} */
-		let parsed;
+	async #load() {
+		this.loading = true;
+		this.error = null;
 		try {
-			parsed = JSON.parse(text);
+			this.#apply(await apiFetch('/library'));
 		} catch (cause) {
-			throw new Error('That file is not valid JSON.', { cause });
+			this.playlists = [];
+			this.#activePlaylistId = null;
+			this.error =
+				/** @type {{ message?: string }} */ (cause)?.message ?? 'Your library could not be loaded.';
+		} finally {
+			this.loading = false;
+			this.#pending = null;
 		}
-
-		const now = new Date().toISOString();
-		if (Array.isArray(parsed)) return this.#importLegacy(parsed, now);
-
-		const source = parsed && typeof parsed === 'object' ? /** @type {any} */ (parsed) : null;
-		if (!source || !Array.isArray(source.playlists)) {
-			throw new Error(
-				'Unrecognised export: expected { playlists: [...] } or a legacy array of ratings.'
-			);
-		}
-
-		const normalized = source.playlists.map(normalizePlaylist);
-		if (normalized.some((/** @type {Playlist|null} */ playlist) => playlist === null)) {
-			throw new Error('Unrecognised export: every playlist needs an "id" and a "videos" array.');
-		}
-
-		let videos = 0;
-		let ratingsApplied = 0;
-		for (const incoming of /** @type {Playlist[]} */ (normalized)) {
-			const before = this.playlists.find((playlist) => playlist.id === incoming.id) ?? null;
-			videos += incoming.videos.length;
-			ratingsApplied += countNewRatings(before, incoming);
-			// A backup is not authoritative about the playlist's contents: it may
-			// predate videos that were added since, and must not condemn them.
-			this.#upsert(incoming, now, { complete: false });
-		}
-
-		if (this.#activePlaylistId === null) this.#activePlaylistId = this.playlists[0]?.id ?? null;
-		this.#persist();
-		return { playlists: normalized.length, videos, ratingsApplied };
 	}
 
 	/**
-	 * Drop everything, in memory and in storage.
+	 * Adopt a `{ activePlaylistId, playlists }` payload.
 	 *
-	 * No UI calls this — it is the reset seam for the suites that exercise the
-	 * singleton in place (`components/browse/json-file.test.js`) instead of booting a
-	 * fresh module. Removing it would mean each of them clearing playlist by playlist.
+	 * Everything goes through `normalizePlaylist`, the same total function that used
+	 * to clean up `localStorage`: the server is trusted, but a shape mismatch between
+	 * a cached client and a new server should cost one playlist, not the page.
 	 *
+	 * @param {any} snapshot
 	 * @returns {void}
 	 */
-	clear() {
-		this.playlists = [];
-		this.#activePlaylistId = null;
-		this.#persist();
-	}
-
-	/**
-	 * Apply a legacy `[{ videoId, title, rating }]` export.
-	 *
-	 * Ratings land on matching videos of the already imported playlists; entries we
-	 * cannot match end up in the {@link LEGACY_PLAYLIST_ID} playlist so nothing is lost.
-	 *
-	 * @param {unknown[]} entries
-	 * @param {string} now
-	 * @returns {ImportSummary}
-	 */
-	#importLegacy(entries, now) {
-		const videos = /** @type {Video[]} */ (
-			entries.map(normalizeVideo).filter((video) => video !== null)
-		);
-		if (videos.length === 0) {
-			throw new Error('Unrecognised export: the array contains no videos with a "videoId".');
-		}
-
-		let ratingsApplied = 0;
-		/** @type {string[]} */
-		const touched = [];
-		/** @type {Video[]} */
-		const unmatched = [];
-
-		for (const imported of videos) {
-			let matched = false;
-			for (const playlist of this.playlists) {
-				const target = playlist.videos.find((video) => video.id === imported.id);
-				if (!target) continue;
-				matched = true;
-				if (!touched.includes(playlist.id)) touched.push(playlist.id);
-				if (imported.rating !== null && target.rating === null) {
-					target.rating = imported.rating;
-					ratingsApplied += 1;
-				}
-				if (imported.unavailable) target.unavailable = true;
-			}
-			if (!matched) unmatched.push(imported);
-		}
-
-		for (const playlist of this.playlists) {
-			if (touched.includes(playlist.id)) playlist.updatedAt = now;
-		}
-
-		let playlists = touched.length;
-		if (unmatched.length > 0) {
-			this.#upsert(
-				{
-					id: LEGACY_PLAYLIST_ID,
-					title: 'Legacy import',
-					description: 'Ratings restored from the vanilla prototype.',
-					channelTitle: '',
-					thumbnail: '',
-					itemCount: unmatched.length,
-					importedAt: now,
-					updatedAt: now,
-					videos: unmatched,
-					order: unmatched.map((video) => video.id)
-				},
-				now,
-				// Each legacy import contributes only the entries it could not match, so
-				// a second one says nothing about what a first one left here.
-				{ complete: false }
-			);
-			playlists += 1;
-			ratingsApplied += unmatched.filter((video) => video.rating !== null).length;
-		}
-
-		if (this.#activePlaylistId === null) this.#activePlaylistId = this.playlists[0]?.id ?? null;
-		this.#persist();
-		return { playlists, videos: videos.length, ratingsApplied };
-	}
-
-	/**
-	 * Insert or merge a playlist.
-	 *
-	 * @param {Playlist} incoming
-	 * @param {string} now
-	 * @param {{ complete?: boolean }} [options] - See {@link mergePlaylist}. Only a
-	 *   YouTube fetch lists every video; a restored backup may be older or partial.
-	 * @returns {Playlist} The stored (merged) playlist.
-	 */
-	#upsert(incoming, now, options) {
-		const index = this.playlists.findIndex((playlist) => playlist.id === incoming.id);
-		const merged = mergePlaylist(
-			index === -1 ? null : this.playlists[index],
-			incoming,
-			now,
-			options
-		);
-		if (index === -1) this.playlists.push(merged);
-		else this.playlists[index] = merged;
-		return /** @type {Playlist} */ (this.playlists.find((playlist) => playlist.id === incoming.id));
-	}
-
-	/**
-	 * Change one video of the active playlist, then stamp and persist the playlist.
-	 *
-	 * @param {string} videoId
-	 * @param {(video: Video) => void} mutate
-	 * @returns {boolean} `false` when the active playlist has no such video.
-	 */
-	#updateVideo(videoId, mutate) {
-		const playlist = this.activePlaylist;
-		const video = playlist?.videos.find((candidate) => candidate.id === videoId);
-		if (!playlist || !video) return false;
-
-		mutate(video);
-		playlist.updatedAt = new Date().toISOString();
-		this.#persist();
-		return true;
-	}
-
-	/** @returns {void} */
-	#hydrate() {
-		const stored = load(STORAGE_KEY, /** @type {any} */ (null));
-		if (!stored || typeof stored !== 'object' || !Array.isArray(stored.playlists)) return;
-
+	#apply(snapshot) {
+		const incoming = Array.isArray(snapshot?.playlists) ? snapshot.playlists : [];
 		this.playlists = /** @type {Playlist[]} */ (
-			stored.playlists.map(normalizePlaylist).filter((playlist) => playlist !== null)
+			incoming.map(normalizePlaylist).filter((/** @type {Playlist|null} */ p) => p !== null)
 		);
-		const activeId = stored.activePlaylistId;
+
+		const activeId = snapshot?.activePlaylistId;
 		this.#activePlaylistId =
 			typeof activeId === 'string' && this.playlists.some((playlist) => playlist.id === activeId)
 				? activeId
 				: (this.playlists[0]?.id ?? null);
 	}
 
-	/** @returns {void} */
-	#persist() {
-		save(STORAGE_KEY, {
-			version: STORAGE_VERSION,
-			activePlaylistId: this.#activePlaylistId,
-			playlists: $state.snapshot(this.playlists)
+	/**
+	 * Insert or merge a playlist the server just handed back.
+	 *
+	 * @param {Playlist} playlist
+	 * @returns {void}
+	 */
+	#replacePlaylist(playlist) {
+		const index = this.playlists.findIndex((candidate) => candidate.id === playlist.id);
+		if (index === -1) this.playlists.push(playlist);
+		else this.playlists[index] = playlist;
+	}
+
+	/**
+	 * Change one video of the active playlist here and then there.
+	 *
+	 * @param {string} videoId
+	 * @param {{ rating?: Rating|null, unavailable?: boolean }} patch
+	 * @param {string} failureMessage
+	 * @returns {boolean} `false` when the active playlist has no such video.
+	 */
+	#patchVideo(videoId, patch, failureMessage) {
+		const playlist = this.activePlaylist;
+		const video = playlist?.videos.find((candidate) => candidate.id === videoId);
+		if (!playlist || !video) return false;
+
+		const playlistId = playlist.id;
+		const before = { rating: video.rating, unavailable: video.unavailable };
+		const previousUpdatedAt = playlist.updatedAt;
+
+		if ('rating' in patch) video.rating = patch.rating ?? null;
+		if ('unavailable' in patch) video.unavailable = Boolean(patch.unavailable);
+		playlist.updatedAt = new Date().toISOString();
+
+		this.#send(
+			apiFetch(
+				`/playlists/${encodeURIComponent(playlistId)}/videos/${encodeURIComponent(videoId)}`,
+				{ method: 'PATCH', body: patch }
+			),
+			() => {
+				// Looked up again rather than captured: a reload may have replaced the
+				// objects under us, and putting a value back into an orphan would look
+				// like it worked.
+				const target = this.playlists.find((candidate) => candidate.id === playlistId);
+				const current = target?.videos.find((candidate) => candidate.id === videoId);
+				if (!target || !current) return;
+				current.rating = before.rating;
+				current.unavailable = before.unavailable;
+				target.updatedAt = previousUpdatedAt;
+			},
+			failureMessage
+		);
+		return true;
+	}
+
+	/**
+	 * @param {Playlist} playlist
+	 * @param {string[]} order
+	 * @returns {boolean}
+	 */
+	#setOrder(playlist, order) {
+		const playlistId = playlist.id;
+		const previousOrder = [...playlist.order];
+		const previousUpdatedAt = playlist.updatedAt;
+
+		playlist.order = order;
+		playlist.updatedAt = new Date().toISOString();
+
+		this.#send(
+			apiFetch(`/playlists/${encodeURIComponent(playlistId)}/order`, {
+				method: 'PUT',
+				body: { order }
+			}),
+			() => {
+				const target = this.playlists.find((candidate) => candidate.id === playlistId);
+				if (!target) return;
+				target.order = previousOrder;
+				target.updatedAt = previousUpdatedAt;
+			},
+			'The new order could not be saved.'
+		);
+		return true;
+	}
+
+	/**
+	 * Wait for a write that has already been applied on screen, and undo it if the
+	 * server says no.
+	 *
+	 * Rolling back to the value captured at the moment of the change — rather than
+	 * re-reading the library — is deliberate: a failed write usually means the device
+	 * is offline, and a read would fail too. The cost is that two changes to the same
+	 * video, the second of which fails, roll back to the state before the second
+	 * rather than before both; the next load settles it either way.
+	 *
+	 * @param {Promise<unknown>} request
+	 * @param {() => void} rollback
+	 * @param {string} failureMessage - One sentence, without the server's own.
+	 * @returns {void}
+	 */
+	#send(request, rollback, failureMessage) {
+		request.catch((/** @type {any} */ cause) => {
+			rollback();
+			notifyError(failureMessage, { description: cause?.message });
 		});
+	}
+}
+
+/**
+ * @param {string} text
+ * @returns {unknown} The parsed file, or the text itself when it is not JSON — the
+ *   server answers with the message the user needs either way, and this way there is
+ *   one place that decides what "not valid JSON" reads like.
+ */
+function parseJsonText(text) {
+	try {
+		return JSON.parse(text);
+	} catch {
+		return text;
 	}
 }
 

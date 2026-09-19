@@ -4,12 +4,26 @@
  * `drizzle-kit generate` diffs this file against `drizzle/meta/` and writes the SQL;
  * nothing here touches the database directly.
  *
- * The library itself lands here in #17. This file currently holds `app_meta` plus
- * the three tables accounts are made of: who may sign in (`users`), who is signed
- * in right now (`sessions`) and who has been asked to join (`invites`).
+ * Three groups: `app_meta` (notes about the installation), the tables accounts are
+ * made of — who may sign in (`users`), who is signed in right now (`sessions`) and
+ * who has been asked to join (`invites`) — and the library itself (`playlists`,
+ * `videos`, `user_state`), which belongs to exactly one account per row.
  */
 
-import { index, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import {
+	boolean,
+	check,
+	index,
+	integer,
+	jsonb,
+	pgEnum,
+	pgTable,
+	text,
+	timestamp,
+	unique,
+	uuid
+} from 'drizzle-orm/pg-core';
 
 /**
  * Small key/value notes about the installation itself.
@@ -108,3 +122,102 @@ export const invites = pgTable(
 	// `/admin` lists the open invites of the whole installation, newest first.
 	(table) => [index('invites_created_at_idx').on(table.createdAt)]
 );
+
+/**
+ * One imported playlist, belonging to exactly one account.
+ *
+ * `youtube_id` is the id the app has always used as `Playlist.id` — a real YouTube
+ * playlist id, or the local `legacy-import` collection an old export's unmatched
+ * ratings land in. It is unique **per user**, which is what lets the API address a
+ * playlist by the id the client already holds instead of handing database uuids to
+ * the browser. `id` stays a uuid so that two users importing the same playlist are
+ * two independent rows.
+ *
+ * `order` is the session order (`Playlist.order`): this playlist's video ids, as the
+ * user shuffled or reset them. It is a jsonb array rather than a column on `videos`
+ * because the user edits it as one value — a shuffle rewrites every position at
+ * once, which a per-row `position` would turn into a thousand updates.
+ */
+export const playlists = pgTable(
+	'playlists',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		youtubeId: text('youtube_id').notNull(),
+		title: text('title').notNull().default(''),
+		description: text('description').notNull().default(''),
+		channelTitle: text('channel_title').notNull().default(''),
+		thumbnail: text('thumbnail').notNull().default(''),
+		itemCount: integer('item_count').notNull().default(0),
+		importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+		order: jsonb('order').notNull().default([])
+	},
+	(table) => [
+		// The import path is an upsert on exactly this pair, and it is also what makes
+		// "one row per playlist per user" a rule the database keeps rather than a habit.
+		unique('playlists_user_id_youtube_id_key').on(table.userId, table.youtubeId)
+	]
+);
+
+/**
+ * One video of one playlist.
+ *
+ * The same YouTube video in two playlists is two rows with two ratings: a tier is a
+ * judgement inside a list, not a global verdict on a video, and the app has always
+ * behaved that way (`mergePlaylist` merges per playlist).
+ *
+ * `published_at` is text, not a timestamp: it is display data the app never does
+ * date arithmetic on, and YouTube sometimes has none at all — `''` is a value a
+ * timestamp column cannot hold, and round-tripping through one would rewrite every
+ * exported timestamp into a different, merely equivalent, string.
+ */
+export const videos = pgTable(
+	'videos',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		playlistId: uuid('playlist_id')
+			.notNull()
+			.references(() => playlists.id, { onDelete: 'cascade' }),
+		youtubeId: text('youtube_id').notNull(),
+		title: text('title').notNull().default(''),
+		description: text('description').notNull().default(''),
+		thumbnail: text('thumbnail').notNull().default(''),
+		channelTitle: text('channel_title').notNull().default(''),
+		publishedAt: text('published_at').notNull().default(''),
+		position: integer('position').notNull().default(0),
+		durationSeconds: integer('duration_seconds'),
+		rating: text('rating'),
+		unavailable: boolean('unavailable').notNull().default(false),
+		ratedAt: timestamp('rated_at', { withTimezone: true })
+	},
+	(table) => [
+		unique('videos_playlist_id_youtube_id_key').on(table.playlistId, table.youtubeId),
+		// The six tiers of `RATING_ORDER`, as a rule the database keeps. An enum would
+		// say the same and then need a migration to add a tier; a check does not, and
+		// `null` — not rated yet — passes either way.
+		check('videos_rating_check', sql`${table.rating} in ('S', 'A', 'B', 'C', 'D', 'F')`)
+	]
+);
+
+/**
+ * Per-account state that belongs to no single playlist.
+ *
+ * Today that is one column: which playlist the user is working on. The row is
+ * created on demand (the first import or selection), so an account that has never
+ * opened the app has no row and reads as "nothing active".
+ *
+ * `active_playlist_id` is a real foreign key with `on delete set null`, so removing
+ * the active playlist cannot leave an account pointing at a playlist that is gone.
+ */
+export const userState = pgTable('user_state', {
+	userId: uuid('user_id')
+		.primaryKey()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	activePlaylistId: uuid('active_playlist_id').references(() => playlists.id, {
+		onDelete: 'set null'
+	}),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});

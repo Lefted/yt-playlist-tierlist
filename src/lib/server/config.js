@@ -77,9 +77,9 @@ export function readConfig(source) {
 		problems.push('DATABASE_URL must be a postgres:// or postgresql:// URL');
 	}
 
-	// The browser still imports with the key its user pasted in; #17 moves that call
-	// behind the server. A deployment carries the server-side key from the start, so
-	// that switch is a release rather than a release plus a secret change.
+	// Every playlist import goes through this key (#17); the browser holds none. Only
+	// production insists on it — a development checkout without one runs fine until
+	// somebody tries to import, and then gets told exactly that (`keyMissing`).
 	const youtubeApiKey = clean(source.YOUTUBE_API_KEY);
 	if (isProduction && !youtubeApiKey) {
 		problems.push('YOUTUBE_API_KEY is required in production (the server-side import key)');

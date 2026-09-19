@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { playlistUrl, thumbnailFor } from './urls.js';
-import { LEGACY_PLAYLIST_ID } from '../state/library.svelte.js';
+import { LEGACY_PLAYLIST_ID } from '../library-io.js';
 import { makeVideo } from '../testing/fixtures.js';
 
 describe('playlistUrl', () => {

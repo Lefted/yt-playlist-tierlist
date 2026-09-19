@@ -68,7 +68,6 @@
 
 /**
  * @typedef {Object} Settings
- * @property {string} apiKey
  * @property {boolean} skipRated
  * @property {boolean} autoAdvance
  * @property {boolean} fullscreenOnPlay

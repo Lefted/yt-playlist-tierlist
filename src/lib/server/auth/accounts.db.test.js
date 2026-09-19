@@ -43,7 +43,7 @@ import {
 } from './users.js';
 import { createDb } from '../db/index.js';
 import { applyMigrations } from '../db/migrations.js';
-import { claimTestDatabase, DB_LOCK_TIMEOUT_MS } from '../db/testing.js';
+import { claimTestDatabase, DB_LOCK_TIMEOUT_MS, emptyTestDatabase } from '../db/testing.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -65,9 +65,7 @@ describeDb('accounts against a real database', () => {
 
 	/** Puts the database back to a freshly migrated, empty installation. */
 	async function reset() {
-		await client`drop table if exists invites, sessions, users, app_meta cascade`;
-		await client`drop type if exists user_role cascade`;
-		await client`drop schema if exists drizzle cascade`;
+		await emptyTestDatabase(client);
 		await applyMigrations(/** @type {string} */ (databaseUrl));
 	}
 

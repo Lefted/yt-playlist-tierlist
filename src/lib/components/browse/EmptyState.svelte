@@ -39,7 +39,8 @@
 			<Card.Title class="text-xl">Rank a YouTube playlist</Card.Title>
 			<Card.Description>
 				Import any public playlist, watch the videos one by one and drop each into a tier from S
-				down to F. Everything — the playlist, your ratings and your API key — stays in this browser.
+				down to F. The playlist and your ratings are stored with your account, so they are there on
+				every device you sign in on.
 			</Card.Description>
 		</Card.Header>
 
@@ -51,8 +52,8 @@
 			</div>
 
 			<p class="text-muted-foreground text-sm">
-				You need a personal YouTube Data API key — the import dialog links to the page that creates
-				one. Already have an export from an earlier session? Restore it instead.
+				Paste a playlist link and the server does the rest — no API key to set up. Already have an
+				export from an earlier session? Restore it instead.
 			</p>
 
 			{#if notice}
