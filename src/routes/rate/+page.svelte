@@ -336,7 +336,10 @@
 	function handleKeydown(event) {
 		if (!current) return;
 
-		const action = shortcutFor(event, settings.shortcuts);
+		const action = shortcutFor(event, {
+			bindings: settings.keybindings,
+			ratingKeys: settings.shortcuts
+		});
 		if (!action) return;
 
 		// `shortcutsEnabled` is about the surroundings — a text field has the focus, or
@@ -461,6 +464,7 @@
 				<PlaybackControls
 					{playing}
 					shortcuts={settings.shortcuts}
+					keybindings={settings.keybindings}
 					canPrevious={session.hasPrevious}
 					canNext={session.hasNext}
 					onprevious={() => session.previous()}
@@ -484,6 +488,7 @@
 				<TierBar
 					bind:this={tierBar}
 					shortcuts={settings.shortcuts}
+					keybindings={settings.keybindings}
 					rating={current.rating}
 					onrate={rate}
 					highlight={awaitingRating}

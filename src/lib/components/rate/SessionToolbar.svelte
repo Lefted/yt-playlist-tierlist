@@ -6,6 +6,7 @@
 	 */
 	import Ban from '@lucide/svelte/icons/ban';
 	import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
+	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import ListFilter from '@lucide/svelte/icons/list-filter';
 	import Settings from '@lucide/svelte/icons/settings';
 	import Shuffle from '@lucide/svelte/icons/shuffle';
@@ -18,7 +19,8 @@
 	import { session } from '$lib/state/session.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
 	import { cn } from '$lib/utils.js';
-	import { shortcutKeys, shortcutTable } from './shortcuts.js';
+	import ShortcutsDialog from './ShortcutsDialog.svelte';
+	import { shortcutTable, tierKeys } from './shortcuts.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -31,15 +33,41 @@
 	/** @type {Props} */
 	let { onunavailable, onshuffle, helpOpen = $bindable(false), class: className } = $props();
 
+	/** Both popovers close themselves when they hand over to the Edit shortcuts dialog. */
+	let settingsOpen = $state(false);
+	let editOpen = $state(false);
+
 	const selectedTiers = $derived([...session.filter.tiers]);
 	const filtered = $derived(selectedTiers.length > 0 || !session.includeUnrated);
-	const shortcuts = $derived(shortcutTable(settings.shortcuts));
-	/** The tier keys as the hint spells them, from the same table the bindings use. */
-	const tierHint = $derived(shortcutKeys(true).rate.join(' ').toLowerCase());
+	const shortcuts = $derived(
+		shortcutTable({ bindings: settings.keybindings, ratingKeys: settings.shortcuts })
+	);
+	/**
+	 * The tier keys as the hint spells them, from the live bindings — one key per
+	 * tier, which is as much as a line of settings copy can carry.
+	 */
+	const tierHint = $derived(
+		Object.values(tierKeys({ bindings: settings.keybindings }) ?? {})
+			.map((keys) => keys[0])
+			.filter(Boolean)
+			.join(' ')
+	);
 	const groups = $derived([
 		{ title: 'Rating', entries: shortcuts.rating },
 		{ title: 'Player', entries: shortcuts.player }
 	]);
+
+	/**
+	 * Hand over from a popover to the dialog. Both are overlays; leaving the popover
+	 * up behind a modal dialog would trap the focus between the two.
+	 *
+	 * @returns {void}
+	 */
+	function openEditor() {
+		settingsOpen = false;
+		helpOpen = false;
+		editOpen = true;
+	}
 </script>
 
 <div class={cn('flex flex-wrap items-center gap-1.5', className)}>
@@ -98,7 +126,7 @@
 		</Popover.Content>
 	</Popover.Root>
 
-	<Popover.Root>
+	<Popover.Root bind:open={settingsOpen}>
 		<Popover.Trigger>
 			{#snippet child({ props })}
 				<Button {...props} variant="ghost" size="sm">
@@ -154,13 +182,18 @@
 				<span>
 					Keyboard shortcuts
 					<span class="text-muted-foreground block text-xs">
-						Off: rate with the buttons only. On: <kbd class="font-mono">{tierHint}</kbd> rate the
-						video — note that <kbd class="font-mono">f</kbd> rates instead of toggling fullscreen;
-						use <kbd class="font-mono">Shift+F</kbd> for fullscreen.
+						Off: rate with the buttons only. On:
+						{#if tierHint}<kbd class="font-mono">{tierHint}</kbd> rate the video.{:else}the keys you
+							bind rate the video.{/if}
 					</span>
 				</span>
 				<Switch bind:checked={settings.shortcuts} />
 			</label>
+
+			<Button variant="outline" size="sm" class="self-start" onclick={openEditor}>
+				<Keyboard aria-hidden="true" />
+				Edit shortcuts
+			</Button>
 		</Popover.Content>
 	</Popover.Root>
 
@@ -216,6 +249,13 @@
 					</div>
 				{/if}
 			{/each}
+
+			<Button variant="outline" size="sm" class="self-start" onclick={openEditor}>
+				<Keyboard aria-hidden="true" />
+				Edit shortcuts
+			</Button>
 		</Popover.Content>
 	</Popover.Root>
 </div>
+
+<ShortcutsDialog bind:open={editOpen} />

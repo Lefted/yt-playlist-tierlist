@@ -82,30 +82,52 @@ things depending on a focus you cannot see.
 
 ### Rating
 
-_Settings → Keyboard shortcuts_ switches this set off (buttons only) and on; the
-choice is remembered. With it off, the tier bar drops its `<kbd>` hints and the
-help popover says so.
+These keys are yours: _Settings → Edit shortcuts_ (also reachable from the `?`
+list) binds any action to any key, and the choice is remembered. _Settings →
+Keyboard shortcuts_ still switches the whole set off (buttons only) and on; with
+it off, the tier bar drops its `<kbd>` hints and the help popover says so.
 
-| Keys                                     | Action                                |
-| ---------------------------------------- | ------------------------------------- |
-| `S` `A` `B` `C` `D` `F`                  | Rate the current video with that tier |
-| `N`                                      | Next video                            |
-| `P`                                      | Previous video                        |
-| `R`                                      | Replay from the start                 |
-| `U`, `Backspace` or `Ctrl`+`Z` (`⌘`+`Z`) | Undo the last rating                  |
-| `Shift`+`L`                              | Loop the current video                |
-| `Shift`+`F`                              | Fullscreen                            |
-| `?`                                      | Show the shortcut list                |
+Defaults — the letters, with `f` left to YouTube:
 
-`F` is the F tier, which is why fullscreen is `Shift`+`F`; `L` is the player's
-"forward 10 s", which is why loop is `Shift`+`L`. A held key repeats only where
-that helps — seeking. A rating, above all, means exactly once.
+| Keys                           | Action                                |
+| ------------------------------ | ------------------------------------- |
+| `S` `A` `B` `C` `D`            | Rate the current video with that tier |
+| `Shift`+`F`                    | Rate it F                             |
+| `F`                            | Fullscreen (as on YouTube)            |
+| `N`                            | Next video                            |
+| `P`                            | Previous video                        |
+| `R`                            | Replay from the start                 |
+| `U`, `Backspace` or `Ctrl`+`Z` | Undo the last rating                  |
+| `Shift`+`L`                    | Loop the current video                |
+| `?`                            | Show the shortcut list                |
 
-The mapping lives in `src/lib/components/rate/shortcuts.js`:
-`shortcutFor(event, ratingKeys)` for the bindings, `shortcutTable(ratingKeys)`
-(grouped into _Rating_ and _Player_) and `tierKeys(ratingKeys)` for every hint the
-UI shows. The tier keys themselves come from `src/lib/tiers.js`, so the help list
-can never disagree with the bindings.
+Every YouTube key therefore keeps its meaning by default; the F tier is the one
+letter that has to take a modifier, and `L` is the player's "forward 10 s", which
+is why loop is `Shift`+`L`. A held key repeats only where that helps — seeking. A
+rating, above all, means exactly once.
+
+**Priority.** A key you bind wins over the proxied player key of the same name:
+bind a tier to `K` and `K` rates, leaving play/pause on `Space`. `?` is the
+exception — it always opens the shortcut list, because that list is how you find
+out what everything else is bound to, so it cannot be rebound. The player layer
+itself (`K`, `Space`, `M`, `J`, `L`, the arrows) is not rebindable; it mirrors
+YouTube, and shadowing it is enough.
+
+**Editing.** One row per action, each with its keys as removable chips and an
+_Add key_ button that records the next keystroke (`Esc` cancels). A key can belong
+to one action only — binding one that is taken is refused with a note saying where
+it is taken, so swapping two keys means removing one first. Binding a key that the
+YouTube layer uses is allowed and says what it overrides. _Reset to defaults_ puts
+the table above back.
+
+The mapping lives in `src/lib/components/rate/shortcuts.js`, which owns the whole
+vocabulary: the chord grammar (`parseChord`/`formatChord`/`normalizeChord` —
+canonical `Ctrl+Alt+Shift+Meta+key`, single characters stored lower-case),
+`DEFAULT_KEYBINDINGS`, `normalizeKeybindings` (what the stored table is cleaned up
+with), `chordConflict` for the editor, `shortcutFor(event, { bindings, ratingKeys })`
+for the matching, and `shortcutKeys`/`shortcutTable`/`tierKeys` for every hint the
+UI shows. All of them read the same bindings, so no `<kbd>`, tooltip or help row
+can promise a key the page does not answer.
 
 **Undo** takes back the last rating (and a manual _Mark unavailable_), restores
 the previous tier and jumps back to that video, up to 50 steps back. It is also
@@ -146,10 +168,10 @@ page under you mid-video.
 
 Everything lives in your browser's `localStorage`, under two keys:
 
-| Key                | Contents                                                                                  |
-| ------------------ | ----------------------------------------------------------------------------------------- |
-| `ytpt:v1:library`  | Every imported playlist, its videos, their tiers and the shuffle order                    |
-| `ytpt:v1:settings` | API key, _skip rated_, _auto-advance_, _fullscreen on play_, _loop_, _keyboard shortcuts_ |
+| Key                | Contents                                                                                                               |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `ytpt:v1:library`  | Every imported playlist, its videos, their tiers and the shuffle order                                                 |
+| `ytpt:v1:settings` | API key, _skip rated_, _auto-advance_, _fullscreen on play_, _loop_, _keyboard shortcuts_ (on/off) and the keybindings |
 
 Both payloads carry a `version` field so a future format change can migrate
 instead of discarding ratings. `src/lib/storage.js` is the only module that
@@ -207,7 +229,8 @@ place; the configuration lives in `components.json`.
   JSDoc typedefs, plus `RATING_ORDER`, `isRating`, `isBetterOrEqual` and
   `normalizeRatings` (the one place an untrusted tier list is cleaned up).
 - `src/lib/tiers.js` — the single source of truth for the six tiers: order,
-  labels, keyboard keys, colours and the shared tier-button chrome.
+  labels, colours and the shared tier-button chrome. The keys are not here: they
+  are the user's, and live in `settings.keybindings`.
 - `src/lib/storage.js` — the only place that touches `localStorage`; every key is
   namespaced `ytpt:v1:<name>`.
 - `src/lib/youtube/api.js` — pure YouTube Data API calls (`parsePlaylistInput`,
@@ -246,13 +269,14 @@ place; the configuration lives in `components.json`.
   up inside that wrapper — which is how `components/rate/PlayerOverlay.svelte`
   gets on screen while fullscreen.
 - The Rate page's rules are pure modules next to it:
-  `components/rate/shortcuts.js` (the key mapping, both layers),
+  `components/rate/shortcuts.js` (the chord grammar, the bindings and the key
+  mapping of both layers; `components/rate/ShortcutsDialog.svelte` is its editor),
   `components/rate/playback.js` (what the end of a video means, loop included)
   and `components/rate/undo.js` (how a reversible step reads).
 - Three tier controls, all driven by `src/lib/tiers.js`:
   `components/TierPicker.svelte` (compact, on a Browse card, with a clear button),
-  `components/rate/TierBar.svelte` (thumb-sized, sticky, with key hints while the
-  rating keys are on) and the row inside `components/rate/PlayerOverlay.svelte`, which
+  `components/rate/TierBar.svelte` (thumb-sized, sticky, with the bound key as a
+  hint while the rating keys are on) and the row inside `components/rate/PlayerOverlay.svelte`, which
   is the only one that is on screen while the player is fullscreen. That overlay
   shares the screen with the browser's and YouTube's own controls, so what it may
   cover is a contract rather than taste: `PlayerOverlay.test.js` renders it through

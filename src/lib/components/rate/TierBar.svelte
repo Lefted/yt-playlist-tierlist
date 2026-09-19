@@ -6,12 +6,13 @@
 	 * the element the Rate page sticks to the bottom of the viewport on mobile.
 	 *
 	 * Sibling control: `components/TierPicker.svelte`, the compact inline version a
-	 * Browse card carries. Both take their colours, labels, keys and order from
-	 * `$lib/tiers.js` and share `TIER_BUTTON_BASE`.
+	 * Browse card carries. Both take their colours, labels and order from
+	 * `$lib/tiers.js` and share `TIER_BUTTON_BASE`; the key hints come from the
+	 * user's bindings instead.
 	 */
 	import { TIERS, TIER_BUTTON_BASE } from '$lib/tiers.js';
 	import { cn } from '$lib/utils.js';
-	import { tierKeys } from './shortcuts.js';
+	import { DEFAULT_KEYBINDINGS, tierKeys } from './shortcuts.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -20,13 +21,21 @@
 	 * @property {boolean} [highlight] - Draw attention: the video ended and wants a rating.
 	 * @property {boolean} [shortcuts] - Whether the rating keys are on; with them off
 	 *   the key hints go, because there is nothing to press.
+	 * @property {import('$lib/types.js').Keybindings} [keybindings] - `settings.keybindings`.
 	 * @property {string} [class]
 	 */
 
 	/** @type {Props} */
-	let { rating, onrate, highlight = false, shortcuts = true, class: className } = $props();
+	let {
+		rating,
+		onrate,
+		highlight = false,
+		shortcuts = true,
+		keybindings = DEFAULT_KEYBINDINGS,
+		class: className
+	} = $props();
 
-	const keys = $derived(tierKeys(shortcuts));
+	const keys = $derived(tierKeys({ bindings: keybindings, ratingKeys: shortcuts }));
 
 	/** @type {HTMLDivElement|undefined} */
 	let group = $state();
@@ -50,13 +59,18 @@
 	class={cn('grid grid-cols-6 gap-1.5 sm:gap-2', className)}
 >
 	{#each TIERS as tier (tier.rating)}
-		{@const key = keys?.[tier.rating]}
+		<!--
+			A tier can carry several keys, but the cap has room for one: the first one
+			is the hint, and the help list has the rest. Unbound tiers show none.
+		-->
+		{@const bound = keys?.[tier.rating] ?? []}
+		{@const key = bound[0]}
 		<button
 			type="button"
 			aria-pressed={rating === tier.rating}
-			aria-keyshortcuts={key}
+			aria-keyshortcuts={bound.length > 0 ? bound.join(' ') : undefined}
 			aria-label={tier.label}
-			title={key ? `${tier.label} (${key.toUpperCase()})` : tier.label}
+			title={key ? `${tier.label} (${key})` : tier.label}
 			onclick={() => onrate(tier.rating)}
 			class={cn(
 				TIER_BUTTON_BASE,
@@ -68,7 +82,9 @@
 		>
 			{tier.rating}
 			{#if key}
-				<kbd class="hidden text-[0.625rem] font-medium opacity-75 sm:block">{key}</kbd>
+				<kbd class="hidden max-w-full truncate text-[0.625rem] font-medium opacity-75 sm:block"
+					>{key}</kbd
+				>
 			{/if}
 		</button>
 	{/each}

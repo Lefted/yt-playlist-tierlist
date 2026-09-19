@@ -18,7 +18,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import { cn } from '$lib/utils.js';
-	import { shortcutKeys } from './shortcuts.js';
+	import { DEFAULT_KEYBINDINGS, shortcutKeys } from './shortcuts.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -37,6 +37,7 @@
 	 * @property {() => void} onundo
 	 * @property {boolean} [shortcuts] - Whether the rating keys are on; with them off
 	 *   the tooltips promise no key.
+	 * @property {import('$lib/types.js').Keybindings} [keybindings] - `settings.keybindings`.
 	 * @property {string} [class]
 	 */
 
@@ -44,6 +45,7 @@
 	let {
 		playing = false,
 		shortcuts = true,
+		keybindings = DEFAULT_KEYBINDINGS,
 		loop = false,
 		canPrevious = true,
 		canNext = true,
@@ -71,7 +73,7 @@
 	 * @property {boolean} [pressed] - A toggle rather than a one-off; shows its state.
 	 */
 
-	const keys = $derived(shortcutKeys(shortcuts));
+	const keys = $derived(shortcutKeys({ bindings: keybindings, ratingKeys: shortcuts }));
 
 	/** @type {Control[]} */
 	const controls = $derived([

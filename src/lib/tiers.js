@@ -1,6 +1,9 @@
 /**
- * Single source of truth for the six tiers: order, labels, keyboard keys and colours.
+ * Single source of truth for the six tiers: order, labels and colours.
  * Used by TierBadge, the Browse tier picker and the Rate tier bar.
+ *
+ * Deliberately no keyboard key: since #12 the keys are the user's, and they live in
+ * `settings.keybindings` — see `components/rate/shortcuts.js`.
  */
 import { RATING_ORDER } from '$lib/types.js';
 
@@ -8,13 +11,12 @@ import { RATING_ORDER } from '$lib/types.js';
  * @typedef {Object} TierDefinition
  * @property {import('$lib/types.js').Rating} rating
  * @property {string} label - Human-readable label ("S tier").
- * @property {string} key - Lower-case keyboard key that assigns this tier.
  * @property {string} solid - Tailwind classes for a filled badge/button.
  * @property {string} soft - Tailwind classes for a tinted, outlined badge.
  * @property {string} ring - Tailwind classes for focus/selection rings.
  */
 
-/** @type {Record<import('$lib/types.js').Rating, Omit<TierDefinition, 'rating' | 'label' | 'key'>>} */
+/** @type {Record<import('$lib/types.js').Rating, Omit<TierDefinition, 'rating' | 'label'>>} */
 const COLOURS = {
 	S: {
 		solid: 'bg-red-500 text-white hover:bg-red-600',
@@ -52,15 +54,11 @@ const COLOURS = {
 export const TIERS = RATING_ORDER.map((rating) => ({
 	rating,
 	label: `${rating} tier`,
-	key: rating.toLowerCase(),
 	...COLOURS[rating]
 }));
 
 /** @type {Record<string, TierDefinition>} Lookup behind {@link tierFor}. */
 const TIER_BY_RATING = Object.fromEntries(TIERS.map((tier) => [tier.rating, tier]));
-
-/** @type {Record<string, import('$lib/types.js').Rating>} lower-case key → rating */
-export const RATING_BY_KEY = Object.fromEntries(TIERS.map((tier) => [tier.key, tier.rating]));
 
 /**
  * What every tier button looks like regardless of where it sits: a centred, bold

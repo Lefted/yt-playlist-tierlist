@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_KEYBINDINGS, normalizeKeybindings } from '$lib/components/rate/shortcuts.js';
 import { STORAGE_PREFIX } from '../storage.js';
 import { createLocalStorageStub } from '../testing/fixtures.js';
+
+/** The defaults as a plain, comparable table. */
+const DEFAULT_KEYS = normalizeKeybindings(DEFAULT_KEYBINDINGS);
 
 /** @type {ReturnType<typeof createLocalStorageStub>} */
 let store;
@@ -33,6 +37,7 @@ describe('defaults', () => {
 			autoAdvance: true,
 			fullscreenOnPlay: false,
 			shortcuts: true,
+			keybindings: DEFAULT_KEYS,
 			loop: false
 		});
 	});
@@ -51,6 +56,7 @@ describe('persistence', () => {
 			autoAdvance: true,
 			fullscreenOnPlay: false,
 			shortcuts: true,
+			keybindings: DEFAULT_KEYS,
 			loop: false
 		});
 	});
@@ -64,6 +70,7 @@ describe('persistence', () => {
 				autoAdvance: false,
 				fullscreenOnPlay: true,
 				shortcuts: false,
+				keybindings: { ...DEFAULT_KEYS, rateS: ['q'] },
 				loop: true
 			})
 		});
@@ -74,6 +81,7 @@ describe('persistence', () => {
 			autoAdvance: false,
 			fullscreenOnPlay: true,
 			shortcuts: false,
+			keybindings: { ...DEFAULT_KEYS, rateS: ['q'] },
 			loop: true
 		});
 	});
@@ -138,5 +146,58 @@ describe('shortcuts', () => {
 		// An older install stored the short-lived mode enum here.
 		const { settings } = await boot({ [KEY]: JSON.stringify({ shortcuts: 'letters' }) });
 		expect(settings.shortcuts).toBe(true);
+	});
+});
+
+describe('keybindings', () => {
+	it('starts on the defaults', async () => {
+		const { settings } = await boot();
+		expect(settings.keybindings).toEqual(DEFAULT_KEYS);
+	});
+
+	it('persists a rebinding', async () => {
+		const { settings } = await boot();
+		settings.keybindings = { ...DEFAULT_KEYS, rateS: ['k'] };
+
+		expect(settings.keybindings.rateS).toEqual(['k']);
+		expect(JSON.parse(/** @type {string} */ (store.entries.get(KEY))).keybindings.rateS).toEqual([
+			'k'
+		]);
+	});
+
+	it('canonicalises what it is given', async () => {
+		const { settings } = await boot();
+		settings.keybindings = { ...DEFAULT_KEYS, rateS: ['SHIFT+Q'] };
+		expect(settings.keybindings.rateS).toEqual(['Shift+q']);
+	});
+
+	it('keeps the stored table but fills a missing action from the defaults', async () => {
+		const { settings } = await boot({
+			[KEY]: JSON.stringify({ keybindings: { rateS: ['q'] } })
+		});
+		expect(settings.keybindings.rateS).toEqual(['q']);
+		expect(settings.keybindings.undo).toEqual(DEFAULT_KEYS.undo);
+	});
+
+	it('drops an unknown action and a malformed chord', async () => {
+		const { settings } = await boot({
+			[KEY]: JSON.stringify({
+				keybindings: { rateS: ['q', 'Nope+z'], somethingElse: ['x'] }
+			})
+		});
+		expect(settings.keybindings.rateS).toEqual(['q']);
+		expect(settings.keybindings.somethingElse).toBeUndefined();
+	});
+
+	it('falls back to the defaults for a table of the wrong type', async () => {
+		const { settings } = await boot({ [KEY]: JSON.stringify({ keybindings: 'letters' }) });
+		expect(settings.keybindings).toEqual(DEFAULT_KEYS);
+	});
+
+	it('hands out a table nobody can write through', async () => {
+		const { settings } = await boot();
+		const snapshot = settings.toJSON();
+		snapshot.keybindings.rateS.push('q');
+		expect(settings.keybindings.rateS).toEqual(['s']);
 	});
 });

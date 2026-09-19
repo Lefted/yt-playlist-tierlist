@@ -6,9 +6,11 @@
  * without any component lifecycle being involved.
  */
 
+import { DEFAULT_KEYBINDINGS, normalizeKeybindings } from '$lib/components/rate/shortcuts.js';
 import { load, save } from '../storage.js';
 
 /** @typedef {import('../types.js').Settings} Settings */
+/** @typedef {import('../types.js').Keybindings} Keybindings */
 
 const STORAGE_KEY = 'settings';
 /**
@@ -25,6 +27,7 @@ const DEFAULTS = {
 	autoAdvance: true,
 	fullscreenOnPlay: false,
 	shortcuts: true,
+	keybindings: normalizeKeybindings(DEFAULT_KEYBINDINGS),
 	loop: false
 };
 
@@ -34,6 +37,9 @@ class SettingsStore {
 	#autoAdvance = $state(DEFAULTS.autoAdvance);
 	#fullscreenOnPlay = $state(DEFAULTS.fullscreenOnPlay);
 	#shortcuts = $state(DEFAULTS.shortcuts);
+	// A copy, not `DEFAULTS.keybindings` itself: `$state` proxies the object it is
+	// given, and a rune-proxied default table would be shared with every write.
+	#keybindings = $state(normalizeKeybindings(DEFAULTS.keybindings));
 	#loop = $state(DEFAULTS.loop);
 
 	constructor() {
@@ -94,6 +100,23 @@ class SettingsStore {
 	}
 
 	/**
+	 * @returns {Keybindings} Which key each rating action answers to — the table the
+	 * Rate page matches against and every key hint is generated from. `shortcuts`
+	 * above still switches the whole layer off; this only says what it listens for.
+	 */
+	get keybindings() {
+		return this.#keybindings;
+	}
+
+	set keybindings(value) {
+		// Normalising here rather than at the call site is what lets the editing UI
+		// hand over a half-trusted table (a chord the user just typed, a reset to the
+		// frozen defaults) and still get a fresh, canonical, unshared one back.
+		this.#keybindings = normalizeKeybindings(value);
+		this.#persist();
+	}
+
+	/**
 	 * @returns {boolean} Restart the current video when it ends instead of moving on.
 	 * A mode, not a property of one video: it applies to the next one too.
 	 */
@@ -117,6 +140,7 @@ class SettingsStore {
 			autoAdvance: this.#autoAdvance,
 			fullscreenOnPlay: this.#fullscreenOnPlay,
 			shortcuts: this.#shortcuts,
+			keybindings: normalizeKeybindings(this.#keybindings),
 			loop: this.#loop
 		};
 	}
@@ -137,6 +161,7 @@ class SettingsStore {
 				? stored.fullscreenOnPlay
 				: DEFAULTS.fullscreenOnPlay;
 		this.#shortcuts = typeof stored.shortcuts === 'boolean' ? stored.shortcuts : DEFAULTS.shortcuts;
+		this.#keybindings = normalizeKeybindings(stored.keybindings);
 		this.#loop = typeof stored.loop === 'boolean' ? stored.loop : DEFAULTS.loop;
 	}
 

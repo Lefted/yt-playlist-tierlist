@@ -43,13 +43,25 @@
  */
 
 /**
+ * The keys of the rating layer: action id (`rateS`, `undo`, `fullscreen`, …) → the
+ * chords bound to it, each a canonical `Ctrl+Alt+Shift+Meta+key` string.
+ *
+ * `components/rate/shortcuts.js` owns the vocabulary — the action list, the chord
+ * grammar, the defaults and the matching. This typedef is only the shape that goes
+ * into storage.
+ *
+ * @typedef {Record<string, string[]>} Keybindings
+ */
+
+/**
  * @typedef {Object} Settings
  * @property {string} apiKey
  * @property {boolean} skipRated
  * @property {boolean} autoAdvance
  * @property {boolean} fullscreenOnPlay
- * @property {boolean} shortcuts - Whether the rating keys are on; the player keys
- *   are proxied either way.
+ * @property {boolean} shortcuts - Whether the rating keys are on at all; the player
+ *   keys are proxied either way.
+ * @property {Keybindings} keybindings - Which key each rating action answers to.
  * @property {boolean} loop
  */
 
