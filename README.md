@@ -116,8 +116,10 @@ The stack lives in memory and belongs to the active playlist.
 **Fullscreen** puts the app's own player wrapper on the screen, not the YouTube
 iframe — that is what keeps the keyboard on our side of the origin boundary. A
 compact overlay (tiers, previous/skip, undo, leave fullscreen) fades in and out
-at the top while it is up. Using YouTube's own fullscreen button instead
-fullscreens the iframe, and then the shortcuts belong to YouTube again.
+in the top left while it is up — clear of the browser's "exit full screen" pill
+and of the embed's own volume, captions and settings buttons, which stay
+clickable. Using YouTube's own fullscreen button instead fullscreens the iframe,
+and then the shortcuts belong to YouTube again.
 
 ## Install as an app (PWA)
 
@@ -251,7 +253,11 @@ place; the configuration lives in `components.json`.
   `components/TierPicker.svelte` (compact, on a Browse card, with a clear button),
   `components/rate/TierBar.svelte` (thumb-sized, sticky, with key hints while the
   rating keys are on) and the row inside `components/rate/PlayerOverlay.svelte`, which
-  is the only one that is on screen while the player is fullscreen.
+  is the only one that is on screen while the player is fullscreen. That overlay
+  shares the screen with the browser's and YouTube's own controls, so what it may
+  cover is a contract rather than taste: `PlayerOverlay.test.js` renders it through
+  `svelte/server` and holds that structure down. Tests elsewhere stick to the pure
+  modules — a render test earns its place only where the markup _is_ the behaviour.
 
 The icons in `static/` are committed, so the build never needs `sharp`. Re-run
 `npm run icons` only after editing the motif in `scripts/generate-icons.mjs`.

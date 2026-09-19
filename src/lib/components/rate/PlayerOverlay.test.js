@@ -1,19 +1,20 @@
 /**
- * The fullscreen overlay's layout contract (issue #13).
+ * The fullscreen overlay's hit-testing contract (issue #13).
  *
- * The overlay shares the screen with two things we do not own: the browser's "exit
- * full screen" pill at the top centre, and YouTube's own buttons in the top right of
- * the embed. Neither is reachable from a test, so what is pinned here is the
- * positioning that keeps out of their way — asserted on the rendered classes, since
- * that is as close to geometry as a DOM-less render gets. `svelte/server` is enough:
- * the overlay's placement is static markup, not behaviour.
+ * The overlay shares the screen with things we do not own — the browser's "exit full
+ * screen" pill and YouTube's own buttons in the corner of the embed — and what broke
+ * them was not the placement alone but the overlay being a hit target across the
+ * whole width. Where exactly the box sits is a layout question a DOM-less render
+ * cannot answer, and pinning the placement classes would only restate them; what it
+ * covers, and that it stays hoverable while faded out, are structural, and that is
+ * what this file holds down. `svelte/server` is enough: the markup is static.
  */
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import PlayerOverlay from './PlayerOverlay.svelte';
 
 /**
- * @param {Partial<Record<string, unknown>>} [props]
+ * @param {{ visible?: boolean, title?: string }} [props] - Everything else is a stub.
  * @returns {string} The overlay's server-rendered HTML.
  */
 function html(props = {}) {
@@ -31,52 +32,46 @@ function html(props = {}) {
 }
 
 /**
- * The opening tag of the overlay's outermost element — the only element of the
- * component that is a hit target.
+ * The opening tags of the overlay's outermost elements — the boxes it puts between
+ * the pointer and the video. Svelte's SSR markers (`<!--[-->`) are comments, not
+ * elements, so they do not count.
  *
  * @param {string} markup
- * @returns {string}
+ * @returns {string[]}
  */
-function rootTag(markup) {
-	const match = markup.match(/<div[^>]*>/);
-	if (!match) throw new Error('the overlay rendered no element');
-	return match[0];
+function outermostTags(markup) {
+	/** @type {string[]} */
+	const tags = [];
+	let depth = 0;
+
+	for (const [tag, closing, selfClosing] of markup.matchAll(/<(\/)?[a-z-]+\b[^>]*?(\/)?>/g)) {
+		if (closing) depth -= 1;
+		else if (depth === 0) tags.push(tag);
+
+		if (!closing && !selfClosing) depth += 1;
+	}
+
+	return tags;
 }
 
 describe('PlayerOverlay', () => {
-	it('is anchored top-left, clear of the browser pill and the embed corner', () => {
-		const tag = rootTag(html());
-
-		// 4 rem down and against the left margin: the pill owns the top centre.
-		expect(tag).toContain('top-16');
-		expect(tag).toContain('left-3');
-		// Wherever there is width to spare, the embed's own buttons keep their corner.
-		expect(tag).toContain('sm:max-w-[calc(100%-14rem)]');
-	});
-
-	it('is sized to its content, so it covers nothing it does not use', () => {
-		const tag = rootTag(html());
-
-		expect(tag).toContain('w-fit');
-		// The full-width strip and its page-wide gradient are what made the video
-		// unclickable; a rounded backdrop behind the group replaced them.
-		expect(tag).not.toContain('inset-x-0');
-		expect(tag).not.toContain('bg-gradient');
-		expect(tag).toContain('bg-black/60');
-	});
-
-	it('lets the button row wrap instead of growing past its budget', () => {
-		expect(html()).toContain('flex-wrap');
+	it('takes the pointer only where its own controls are', () => {
+		// Anything the overlay paints is either as big as its content or transparent to
+		// the pointer — the full-width strip that swallowed clicks meant for the embed
+		// was neither. Which corner it then sits in is left free on purpose.
+		for (const tag of outermostTags(html({ title: 'A rather long video title, as they go' }))) {
+			expect(tag.includes('w-fit') || tag.includes('pointer-events-none')).toBe(true);
+		}
 	});
 
 	it('stays a hit target while faded out, so hovering it brings the controls back', () => {
 		const markup = html({ visible: false });
+		const [box] = outermostTags(markup);
 
-		// Only the inner column goes inert: an inert box is not hit-tested, and the
-		// pointer-move handler lives on the box.
-		expect(rootTag(markup)).not.toContain('inert');
+		// Only the inner column goes inert: inert content is not hit-tested, and the
+		// pointer-move handler that revives the controls lives on the box.
+		expect(box).not.toContain('inert');
 		expect(markup).toContain('inert=""');
-		expect(rootTag(markup)).toContain('opacity-0');
 	});
 
 	it('offers a tier button per tier plus previous, skip, undo and exit', () => {

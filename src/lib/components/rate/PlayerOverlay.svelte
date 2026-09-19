@@ -12,8 +12,9 @@
 	 *
 	 * - the bottom edge belongs to YouTube's own control bar, so the overlay is up top;
 	 * - the top centre belongs to the browser: Chrome parks its "Press Esc to exit
-	 *   full screen" pill there, roughly over the top 4 rem, and it used to land on
-	 *   the D/F buttons. Hence the 4 rem offset from the top and the anchor on the left;
+	 *   full screen" pill there — it sits a little way down and it used to land on the
+	 *   D/F buttons. Hence both the anchor on the left and the 6 rem offset from the
+	 *   top, which clears the whole pill and not just the issue's estimate of it;
 	 * - the top right belongs to the embed (volume, captions, settings), so the group
 	 *   keeps 14 rem clear of the right edge wherever there is width to spare.
 	 *
@@ -83,24 +84,31 @@
 </script>
 
 <!--
-	The box is not a control itself; it only notices that the pointer is around. Its
-	own backdrop is what keeps the buttons readable now that the gradient is gone.
+	The box is not a control itself; it only notices that the pointer is around. It is
+	also the only thing this component paints, so a click anywhere else on the video
+	reaches the player. Its backdrop is what keeps the buttons readable now that the
+	page-wide gradient is gone.
 
-	`w-fit` plus the wrapping button row is what makes it survive a phone in landscape:
-	the group is never wider than its content, and the content folds into a second row
-	long before it runs into the right-hand `max-w` budget. That budget is the full
-	width minus the margin below `sm`, where reserving 14 rem would leave too little to
-	lay out at all — down there the 4 rem top offset alone clears the embed's buttons.
+	The `max-w` is the right-hand budget of the header comment: 15 rem minus the left
+	margin leaves the embed's corner buttons a clear 14 rem. Below `sm` that would
+	leave too little to lay the buttons out in at all, so down there the only reserve
+	is the top offset, which already clears the embed's chrome. `w-fit` and the
+	wrapping button row are what keep a phone in landscape working: the box is only as
+	wide as its content, which folds into a second row rather than growing.
 -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-	class="absolute top-16 left-3 z-10 flex w-fit max-w-[calc(100%-1.5rem)] flex-col items-start gap-2 rounded-xl bg-black/60 p-2 backdrop-blur transition-opacity duration-200 sm:max-w-[calc(100%-14rem)] sm:p-3"
+	class="absolute top-24 left-3 z-10 flex w-fit max-w-[calc(100%-1.5rem)] flex-col items-start gap-2 rounded-xl bg-black/60 p-2 backdrop-blur transition-opacity duration-200 sm:max-w-[calc(100%-15rem)] sm:p-3"
 	class:opacity-0={!visible}
 	onpointermove={() => onactivity?.()}
 >
 	<div class="flex max-w-full flex-col items-start gap-2" inert={!visible} aria-hidden={!visible}>
 		{#if title}
-			<p class="line-clamp-1 max-w-full text-sm font-medium text-white/90">
+			<!--
+				Capped, not `max-w-full`: inside a `w-fit` box a long title would set the
+				width, and the box would be back to covering most of the picture.
+			-->
+			<p class="line-clamp-1 max-w-[20rem] text-sm font-medium text-white/90">
 				{title}
 			</p>
 		{/if}
