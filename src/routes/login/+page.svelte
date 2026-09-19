@@ -1,8 +1,8 @@
 <script>
-	import { applyAction, enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
+	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
 
+	import { enhanceAuthForm } from '$lib/auth/enhance.js';
 	import AuthCard from '$lib/components/auth/AuthCard.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -15,28 +15,7 @@
 	/** Where the visitor was headed before the gate sent them here. */
 	const redirectTo = $derived(page.url.searchParams.get('redirectTo') ?? '');
 
-	/**
-	 * The action answers with a redirect on success. SvelteKit's default handler
-	 * would follow it without re-running the root layout load, and the header would
-	 * still believe nobody is signed in — `invalidateAll` is what re-asks
-	 * `/api/v1/me`.
-	 *
-	 * @type {import('$app/forms').SubmitFunction}
-	 */
-	const submit = () => {
-		submitting = true;
-		return async ({ result }) => {
-			submitting = false;
-			if (result.type === 'redirect') {
-				// The target is the server action's own `redirect()` — already built and
-				// validated there, so there is no route literal here for `resolve()` to take.
-				// eslint-disable-next-line svelte/no-navigation-without-resolve
-				await goto(result.location, { invalidateAll: true });
-				return;
-			}
-			await applyAction(result);
-		};
-	};
+	const submit = enhanceAuthForm((pending) => (submitting = pending));
 </script>
 
 <svelte:head>

@@ -19,7 +19,7 @@
 	 * account, and the chrome around them would only offer navigation that bounces
 	 * straight back here.
 	 */
-	const shell = $derived(!isShellFreePath(page.url.pathname));
+	const showShell = $derived(!isShellFreePath(page.url.pathname));
 
 	/**
 	 * The manifest is emitted by vite-plugin-pwa, so its location comes from
@@ -50,7 +50,7 @@
 <ModeWatcher />
 
 <div class="flex min-h-svh w-full flex-col">
-	{#if shell}
+	{#if showShell}
 		<AppHeader />
 	{/if}
 
@@ -58,11 +58,11 @@
 		`--app-tab-bar-inset` (see src/app.css) is the height of the mobile bottom tab
 		bar, and 0 from `md` up. Pages therefore never need their own bottom padding.
 	-->
-	<div class="flex flex-1 flex-col {shell ? 'pb-(--app-tab-bar-inset)' : ''}">
+	<div class="flex flex-1 flex-col {showShell ? 'pb-(--app-tab-bar-inset)' : ''}">
 		{@render children()}
 	</div>
 
-	{#if shell}
+	{#if showShell}
 		<BottomTabBar />
 	{/if}
 	<ReloadPrompt />

@@ -10,7 +10,6 @@ import {
 	isDuplicateEmail,
 	normalizeEmail
 } from '$lib/server/auth/users.js';
-import { serverConfig } from '$lib/server/config.js';
 import { getDb } from '$lib/server/db/index.js';
 
 /**
@@ -103,7 +102,7 @@ export const actions = {
 			});
 		}
 
-		await startSession(event, db, userId, { secure: serverConfig().isProduction });
+		await startSession(event, db, userId);
 
 		redirect(303, DEFAULT_LANDING_PATH);
 	}

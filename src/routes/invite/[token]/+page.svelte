@@ -1,8 +1,8 @@
 <script>
-	import { applyAction, enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
+	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 
+	import { enhanceAuthForm } from '$lib/auth/enhance.js';
 	import AuthCard from '$lib/components/auth/AuthCard.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -18,23 +18,7 @@
 	/** An invite addressed to someone shows the address and does not let it be changed. */
 	const pinnedEmail = $derived(data.email);
 
-	/** @type {import('$app/forms').SubmitFunction} */
-	const submit = () => {
-		submitting = true;
-		return async ({ result }) => {
-			submitting = false;
-			if (result.type === 'redirect') {
-				// The account exists and is signed in; the root layout has to re-ask
-				// `/api/v1/me` before the shell renders a name.
-				// The target is the server action's own `redirect()` — already built and
-				// validated there, so there is no route literal here for `resolve()` to take.
-				// eslint-disable-next-line svelte/no-navigation-without-resolve
-				await goto(result.location, { invalidateAll: true });
-				return;
-			}
-			await applyAction(result);
-		};
-	};
+	const submit = enhanceAuthForm((pending) => (submitting = pending));
 </script>
 
 <svelte:head>

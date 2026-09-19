@@ -68,6 +68,19 @@ spec:
             # build absolute URLs; a wrong value shows up as 403 on every POST.
             - name: ORIGIN
               value: 'https://amv.lefted.dev'
+            # Without these, `getClientAddress()` returns the *ingress pod's*
+            # address for every request, and the login rate limiter's per-IP
+            # bucket becomes one global bucket: ten failed logins anywhere would
+            # lock the whole installation out for fifteen minutes (#16).
+            # XFF_DEPTH counts trusted proxies from the right, so 1 is "Traefik
+            # is the only hop that appends to X-Forwarded-For". If Cloudflare is
+            # ever switched from DNS-only to proxied, this has to become 2 —
+            # check `sessions.ip` after such a change: it should hold real
+            # client addresses, not the ingress or an edge.
+            - name: ADDRESS_HEADER
+              value: 'x-forwarded-for'
+            - name: XFF_DEPTH
+              value: '1'
           # Migrations run on boot, so the first request can be minutes away on
           # a big one. The startupProbe holds the liveness probe off until the
           # app answers at all — without it, liveness (15s + 3 × 30s) would kill

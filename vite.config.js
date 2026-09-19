@@ -2,9 +2,24 @@ import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
 import { defineConfig } from 'vitest/config';
+import { SHELL_FREE_PREFIXES } from './src/lib/auth/routes.js';
 
 /** zinc-950 — matches `--background` of the dark palette in `src/app.css`. */
 const THEME_COLOR = '#09090b';
+
+/**
+ * Navigations the precached shell must never answer.
+ *
+ * The session-dependent pages come straight from the route policy, so adding one
+ * there is enough (`src/lib/auth/routes.js`). The two below are not navigations at
+ * all — but a client-side route change to one would be, and an HTML shell is a poor
+ * answer to a JSON request.
+ */
+const NO_CACHED_SHELL = [
+	...SHELL_FREE_PREFIXES.map((prefix) => new RegExp(`^${prefix}(/|$)`)),
+	/^\/api\//,
+	/^\/healthz$/
+];
 
 export default defineConfig({
 	plugins: [
@@ -57,19 +72,13 @@ export default defineConfig({
 				cleanupOutdatedCaches: true,
 				// Every route is served by the SPA shell, so unknown navigations resolve offline too.
 				navigateFallback: '/',
-				// …except the routes whose answer depends on the session. The precached
-				// shell is one file for everybody, so serving it for `/login` would hand a
-				// signed-out visitor a cached page instead of the server's redirect, and
-				// serving it for `/invite/<token>` would swallow the token. `/api` and
-				// `/healthz` are not navigations at all, but a client-side route change to
-				// one would be, and an HTML shell is a poor answer to a JSON request.
-				navigateFallbackDenylist: [
-					/^\/login\b/,
-					/^\/logout\b/,
-					/^\/invite\b/,
-					/^\/api\//,
-					/^\/healthz$/
-				],
+				// …except the routes whose answer depends on the session: serving the
+				// cached shell for `/login` would hand a signed-out visitor a page instead
+				// of the server's redirect, and for `/invite/<token>` it would swallow the
+				// token. The price is that a *cold* offline start at one of these URLs
+				// gets the browser's own error page — an offline start at `/` or `/browse`
+				// still works and lands on the login form from there.
+				navigateFallbackDenylist: NO_CACHED_SHELL,
 				runtimeCaching: [
 					{
 						// YouTube thumbnails are immutable per video and dominate the Browse page.

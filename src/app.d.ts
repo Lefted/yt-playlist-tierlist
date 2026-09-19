@@ -11,8 +11,8 @@ declare global {
 		// public routes — everything else is refused before it reaches a handler.
 		interface Locals {
 			user: import('$lib/server/auth/users.js').PublicUser | null;
-			/** The stored SHA-256 of the session token, i.e. `sessions.id`. */
-			sessionId: string | null;
+			/** The session row behind the cookie; `id` is its SHA-256, never the token. */
+			session: import('$lib/server/auth/sessions.js').SessionInfo | null;
 		}
 		// interface Error {}
 		// interface PageData {}

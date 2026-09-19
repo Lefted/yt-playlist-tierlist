@@ -14,6 +14,7 @@ import {
 	normalizeEmail,
 	setUserDisabled
 } from '$lib/server/auth/users.js';
+import { serverConfig } from '$lib/server/config.js';
 import { getDb } from '$lib/server/db/index.js';
 
 /**
@@ -56,7 +57,7 @@ export const actions = {
 	 *
 	 * @type {import('./$types').Action}
 	 */
-	createInvite: async ({ locals, request }) => {
+	createInvite: async ({ locals, request, url }) => {
 		requireAdmin(locals);
 
 		const data = await request.formData();
@@ -76,7 +77,17 @@ export const actions = {
 			ttlDays
 		});
 
-		return { action: 'createInvite', token, expiresAt: expiresAt.toISOString() };
+		// Built here rather than from `location.origin` in the browser: `ORIGIN` is what
+		// the installation calls itself, and an admin reaching the app by some other
+		// hostname would otherwise copy a link that only works for them. It falls back
+		// to the request's own origin, because `ORIGIN` is optional in development.
+		const base = serverConfig().origin ?? url.origin;
+
+		return {
+			action: 'createInvite',
+			link: `${base}/invite/${token}`,
+			expiresAt: expiresAt.toISOString()
+		};
 	},
 
 	/**
@@ -91,9 +102,15 @@ export const actions = {
 		const id = String(data.get('inviteId') ?? '');
 		if (!id) return fail(400, { action: 'revokeInvite', message: 'No invite was named.' });
 
+		// One answer for "no such invite" and "already redeemed": both mean there is
+		// nothing left to revoke, and a used invite is kept on purpose as the record of
+		// who joined on whose invitation.
 		const removed = await revokeInvite(getDb(), id);
 		if (!removed) {
-			return fail(404, { action: 'revokeInvite', message: 'That invite is already gone.' });
+			return fail(404, {
+				action: 'revokeInvite',
+				message: 'That invite is already gone, or has already been used.'
+			});
 		}
 
 		return { action: 'revokeInvite' };

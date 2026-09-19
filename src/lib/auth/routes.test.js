@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isApiPath, isPublicPath, isShellFreePath, loginPathFor, safeRedirect } from './routes.js';
+import {
+	isApiPath,
+	isPublicPath,
+	isShellFreePath,
+	loginPathFor,
+	safeRedirect,
+	SHELL_FREE_PREFIXES
+} from './routes.js';
 
 describe('isPublicPath', () => {
 	it('lets the two probes of the deployment contract through', () => {
@@ -66,6 +73,18 @@ describe('isShellFreePath', () => {
 	it('keeps it everywhere else', () => {
 		expect(isShellFreePath('/browse')).toBe(false);
 		expect(isShellFreePath('/admin')).toBe(false);
+		expect(isShellFreePath('/logins')).toBe(false);
+	});
+
+	it('is the same list the service worker refuses to answer from cache', () => {
+		// `vite.config.js` builds `navigateFallbackDenylist` from this export. A page
+		// that must not be served from the precached shell and a page that must not
+		// wear the app chrome are the same set — the session-dependent ones — and this
+		// holds the two uses to one definition.
+		expect(SHELL_FREE_PREFIXES).toEqual(['/login', '/logout', '/invite']);
+		for (const prefix of SHELL_FREE_PREFIXES) {
+			expect(isShellFreePath(prefix)).toBe(true);
+		}
 	});
 });
 

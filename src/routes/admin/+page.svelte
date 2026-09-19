@@ -1,6 +1,5 @@
 <script>
 	import { enhance } from '$app/forms';
-	import { resolve } from '$app/paths';
 
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -18,9 +17,7 @@
 	 * which is why the copy field is loud about it.
 	 */
 	const newInvite = $derived(
-		form?.action === 'createInvite' && 'token' in form
-			? `${location.origin}${resolve('/invite/[token]', { token: String(form.token) })}`
-			: null
+		form?.action === 'createInvite' && 'link' in form ? String(form.link) : null
 	);
 
 	/** Invites that could still be redeemed right now. */

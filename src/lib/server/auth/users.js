@@ -8,7 +8,7 @@
  */
 
 import { and, count, eq, isNull } from 'drizzle-orm';
-import { hashPassword } from './password.js';
+import { hashPassword, passwordProblem } from './password.js';
 import { users } from '../db/schema.js';
 
 /** @typedef {import('../db/index.js').DbHandle['db']} Db */
@@ -101,16 +101,6 @@ export async function findUserByEmail(db, email) {
 		.from(users)
 		.where(eq(users.email, normalizeEmail(email)))
 		.limit(1);
-	return row ?? null;
-}
-
-/**
- * @param {Db} db
- * @param {string} id
- * @returns {Promise<typeof users.$inferSelect | null>}
- */
-export async function findUserById(db, id) {
-	const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1);
 	return row ?? null;
 }
 
@@ -260,15 +250,25 @@ export async function countActiveAdmins(db) {
  * `onConflictDoNothing` covers the one race worth covering: two replicas booting
  * against the same empty database.
  *
+ * A malformed address or a password below the minimum **throws**, and the boot hook
+ * turns that into a refusal to start. Creating the weak admin anyway would be the
+ * worst of the options — an installation where the one account that can do anything
+ * has a three-character password, and nothing on screen to say so — and skipping it
+ * silently would leave an app nobody can log into at all.
+ *
  * @param {Db} db
  * @param {object} credentials
  * @param {string | null} credentials.email
  * @param {string | null} credentials.password
  * @returns {Promise<PublicUser | null>} The account it created, or `null`.
+ * @throws {Error} If the pair is set but unusable.
  */
 export async function bootstrapAdmin(db, { email, password }) {
 	if (!email || !password) return null;
 	if ((await countUsers(db)) > 0) return null;
+
+	const problem = emailProblem(email) ?? passwordProblem(password);
+	if (problem) throw new Error(`ADMIN_EMAIL/ADMIN_PASSWORD cannot create an admin: ${problem}`);
 
 	const [row] = await db
 		.insert(users)

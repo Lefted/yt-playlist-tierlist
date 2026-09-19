@@ -13,10 +13,20 @@
 import { eq } from 'drizzle-orm';
 import { createToken, hashToken } from './tokens.js';
 import { publicUser } from './users.js';
+import { serverConfig } from '../config.js';
 import { sessions, users } from '../db/schema.js';
 
 /** @typedef {import('../db/index.js').DbHandle['db']} Db */
 /** @typedef {import('./users.js').PublicUser} PublicUser */
+
+/**
+ * The current session, as the rest of the server sees it (`event.locals.session`).
+ * Never the cookie value — `id` is the stored hash.
+ *
+ * @typedef {object} SessionInfo
+ * @property {string} id - `sessions.id`, i.e. the SHA-256 of the cookie's token.
+ * @property {Date} expiresAt
+ */
 
 /** The cookie name from #14's contract. Namespaced, because `lefted.dev` has neighbours. */
 export const SESSION_COOKIE = 'amv_session';
@@ -48,7 +58,7 @@ export const SESSION_REFRESH_AFTER_MS = 24 * 60 * 60 * 1000;
  *
  * @param {object} options
  * @param {boolean} options.secure
- * @returns {import('cookie').CookieSerializeOptions & { path: string }}
+ * @returns {Parameters<import('@sveltejs/kit').Cookies['set']>[2]}
  */
 export function sessionCookieOptions({ secure }) {
 	return {
@@ -58,6 +68,20 @@ export function sessionCookieOptions({ secure }) {
 		secure,
 		maxAge: Math.floor(SESSION_TTL_MS / 1000)
 	};
+}
+
+/**
+ * Puts (or refreshes) the session cookie on this response.
+ *
+ * The one writer, so `secure` is decided once from the environment instead of being
+ * carried down from three call sites that each had to remember to ask.
+ *
+ * @param {import('@sveltejs/kit').Cookies} cookies
+ * @param {string} token - The raw value, as handed out by {@link createSession}.
+ * @returns {void}
+ */
+export function writeSessionCookie(cookies, token) {
+	cookies.set(SESSION_COOKIE, token, sessionCookieOptions({ secure: serverConfig().isProduction }));
 }
 
 /**
@@ -123,7 +147,7 @@ export async function createSession(db, { userId, userAgent = null, ip = null, n
  * @param {Db} db
  * @param {string} token - Raw cookie value.
  * @param {number} [now] - Epoch milliseconds.
- * @returns {Promise<{ user: PublicUser, sessionId: string, expiresAt: Date, refreshed: boolean } | null>}
+ * @returns {Promise<{ user: PublicUser, session: SessionInfo, refreshed: boolean } | null>}
  *   `null` when the token is unknown, expired, or belongs to a disabled account —
  *   all three mean the same thing to the caller: there is no session.
  */
@@ -175,8 +199,7 @@ export async function loadSession(db, token, now = Date.now()) {
 			displayName: row.displayName,
 			role: row.role
 		}),
-		sessionId: id,
-		expiresAt,
+		session: { id, expiresAt },
 		refreshed
 	};
 }
@@ -212,18 +235,18 @@ export async function deleteSessionsOfUser(db, userId) {
  * @param {import('@sveltejs/kit').RequestEvent} event
  * @param {Db} db
  * @param {string} userId
- * @param {object} options
- * @param {boolean} options.secure - Whether to mark the cookie `Secure` (production).
  * @returns {Promise<void>}
  */
-export async function startSession(event, db, userId, { secure }) {
+export async function startSession(event, db, userId) {
 	const { token } = await createSession(db, {
 		userId,
 		userAgent: event.request.headers.get('user-agent'),
+		// Only as good as `ADDRESS_HEADER`/`XFF_DEPTH`: behind an ingress without
+		// them this is the proxy's address, not the visitor's. See deploy/k8s/app.yaml.
 		ip: event.getClientAddress()
 	});
 
-	event.cookies.set(SESSION_COOKIE, token, sessionCookieOptions({ secure }));
+	writeSessionCookie(event.cookies, token);
 }
 
 /**
@@ -236,9 +259,9 @@ export async function startSession(event, db, userId, { secure }) {
  * @returns {Promise<void>}
  */
 export async function endSession(event, db) {
-	if (event.locals.sessionId) await deleteSession(db, event.locals.sessionId);
+	if (event.locals.session) await deleteSession(db, event.locals.session.id);
 
 	event.locals.user = null;
-	event.locals.sessionId = null;
+	event.locals.session = null;
 	event.cookies.delete(SESSION_COOKIE, { path: '/' });
 }

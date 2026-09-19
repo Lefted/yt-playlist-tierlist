@@ -145,8 +145,11 @@ export async function redeemInvite(db, inviteId, userId, now = Date.now()) {
 }
 
 /**
- * Throws away an invite that has not been used. Revoking a used one would erase the
- * record of who joined how, so `/admin` only offers it for open ones.
+ * Throws away an invite that has not been used.
+ *
+ * The `is null` is a rule, not a convenience: `used_at`/`used_by` are the record of
+ * who joined and on whose invitation, and a hand-made POST must not be able to erase
+ * it just because `/admin` only draws the button for open ones.
  *
  * @param {Db} db
  * @param {string} inviteId
@@ -155,7 +158,7 @@ export async function redeemInvite(db, inviteId, userId, now = Date.now()) {
 export async function revokeInvite(db, inviteId) {
 	const rows = await db
 		.delete(invites)
-		.where(eq(invites.id, inviteId))
+		.where(and(eq(invites.id, inviteId), isNull(invites.usedAt)))
 		.returning({ id: invites.id });
 	return rows.length > 0;
 }

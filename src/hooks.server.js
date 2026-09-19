@@ -9,7 +9,7 @@
 import { building, dev } from '$app/environment';
 import { redirect } from '@sveltejs/kit';
 import { isApiPath, isPublicPath, loginPathFor } from '$lib/auth/routes.js';
-import { loadSession, SESSION_COOKIE, sessionCookieOptions } from '$lib/server/auth/sessions.js';
+import { loadSession, SESSION_COOKIE, writeSessionCookie } from '$lib/server/auth/sessions.js';
 import { bootstrapAdmin } from '$lib/server/auth/users.js';
 import { serverConfig } from '$lib/server/config.js';
 import { getDb } from '$lib/server/db/index.js';
@@ -79,7 +79,7 @@ export const init = async () => {
  */
 export const handle = async ({ event, resolve }) => {
 	event.locals.user = null;
-	event.locals.sessionId = null;
+	event.locals.session = null;
 
 	const path = event.url.pathname;
 
@@ -122,20 +122,17 @@ async function attachSession(event) {
 	const token = event.cookies.get(SESSION_COOKIE);
 	if (!token) return;
 
-	const config = serverConfig();
-	const session = await loadSession(getDb(), token);
+	const resolved = await loadSession(getDb(), token);
 
-	if (!session) {
+	if (!resolved) {
 		event.cookies.delete(SESSION_COOKIE, { path: '/' });
 		return;
 	}
 
-	event.locals.user = session.user;
-	event.locals.sessionId = session.sessionId;
+	event.locals.user = resolved.user;
+	event.locals.session = resolved.session;
 
 	// The sliding half of the 30-day expiry: the row was just pushed out, so the
 	// browser has to hear about it too, or the cookie would expire first.
-	if (session.refreshed) {
-		event.cookies.set(SESSION_COOKIE, token, sessionCookieOptions({ secure: config.isProduction }));
-	}
+	if (resolved.refreshed) writeSessionCookie(event.cookies, token);
 }

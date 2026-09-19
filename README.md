@@ -209,6 +209,12 @@ takes the same time in all three cases. Logins are rate-limited to 10 attempts
 per 15 minutes per address and per client address, in memory — a brake on
 guessing, not a security boundary (see `src/lib/server/auth/rate-limit.js`).
 
+**Behind a reverse proxy, set `ADDRESS_HEADER` and `XFF_DEPTH`** (adapter-node's
+own variables; `deploy/k8s/app.yaml` does). Without them every request appears to
+come from the proxy, the per-IP bucket becomes one global bucket, and ten failed
+logins anywhere lock the whole installation out for fifteen minutes. `sessions.ip`
+is the place to check: it should hold real client addresses.
+
 The session cookie is `amv_session`: `HttpOnly`, `SameSite=Lax`, `Path=/`,
 `Secure` under `NODE_ENV=production`, 30 days, slid forward once a day of use.
 It carries a random token; `sessions.id` is its SHA-256, so a database dump
@@ -496,11 +502,15 @@ side.
   and the decoy hash that makes an unknown address cost the same as a wrong
   password), `tokens.js` (32 random bytes out, a SHA-256 into the database),
   `sessions.js` (the `amv_session` cookie, the sliding expiry, `startSession` /
-  `endSession`), `invites.js`, `users.js` (validation, the bootstrap admin,
-  `isDuplicateEmail`) and `rate-limit.js`.
-- `src/lib/auth/routes.js` is deliberately **not** server-only: `hooks.server.js`
-  and `src/routes/+layout.js` both need the same list of public paths, because with
-  `ssr = false` a navigation inside the SPA never reaches the server.
+  `endSession`), `login.js` (`authenticate`, the whole decision a sign-in makes, so
+  it can be tested against a database without a request), `invites.js`, `users.js`
+  (validation, the bootstrap admin, `isDuplicateEmail`) and `rate-limit.js`.
+- `src/lib/auth/routes.js` is deliberately **not** server-only: `hooks.server.js`,
+  `src/routes/+layout.js` and `vite.config.js` all need the same lists of paths,
+  because with `ssr = false` a navigation inside the SPA never reaches the server and
+  the service worker's `navigateFallbackDenylist` has to agree with both.
+  `src/lib/auth/enhance.js` is the one `use:enhance` handler the three account forms
+  share; `src/lib/components/auth/AuthCard.svelte` is the frame they are drawn in.
 - `src/routes/healthz/+server.js` (no database), `src/routes/api/v1/meta/+server.js`
   (needs one, 503 without it) and `src/routes/api/v1/me/+server.js` (the signed-in
   account).

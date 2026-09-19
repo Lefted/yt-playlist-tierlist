@@ -46,10 +46,23 @@ const APP_PREFIX = '/_app/';
 export function isPublicPath(pathname) {
 	if (PUBLIC_EXACT.has(pathname)) return true;
 	if (pathname.startsWith(APP_PREFIX)) return true;
-	if (PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
-		return true;
-	}
+	if (isAtOrBelow(PUBLIC_PREFIXES, pathname)) return true;
 	return isStaticAsset(pathname);
+}
+
+/**
+ * Whether `pathname` is one of `prefixes` or lives under it.
+ *
+ * The `/`-or-end is the whole point: `startsWith('/login')` alone would also match
+ * `/logins`, and a route-prefix test that answers yes to a route nobody wrote is
+ * how a gate acquires a hole.
+ *
+ * @param {string[]} prefixes
+ * @param {string} pathname
+ * @returns {boolean}
+ */
+function isAtOrBelow(prefixes, pathname) {
+	return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 /**
@@ -69,8 +82,19 @@ function isStaticAsset(pathname) {
 	return segments.length === 2 && segments[1].includes('.');
 }
 
-/** The pages that stand outside the app: signing in, signing up, signing out. */
-const SHELL_FREE_PREFIXES = ['/login', '/logout', '/invite'];
+/**
+ * The pages that stand outside the app: signing in, signing up, signing out.
+ *
+ * Exported because `vite.config.js` builds the service worker's
+ * `navigateFallbackDenylist` from it — the precached shell is one file for
+ * everybody, and these are exactly the URLs whose answer depends on who is asking.
+ * Two hand-kept lists of that fact would drift, and the drift would show up as a
+ * cached login page or a swallowed invite token.
+ *
+ * Not the same list as {@link PUBLIC_PREFIXES}, deliberately: `/logout` needs a
+ * session (you cannot log out of nothing) but has no business showing a nav bar.
+ */
+export const SHELL_FREE_PREFIXES = ['/login', '/logout', '/invite'];
 
 /**
  * Whether a page should be rendered without the app shell.
@@ -83,9 +107,7 @@ const SHELL_FREE_PREFIXES = ['/login', '/logout', '/invite'];
  * @returns {boolean}
  */
 export function isShellFreePath(pathname) {
-	return SHELL_FREE_PREFIXES.some(
-		(prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
-	);
+	return isAtOrBelow(SHELL_FREE_PREFIXES, pathname);
 }
 
 /**

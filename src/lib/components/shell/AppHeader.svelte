@@ -1,12 +1,12 @@
 <script>
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { toggleMode } from 'mode-watcher';
 	import Moon from '@lucide/svelte/icons/moon';
 	import Sun from '@lucide/svelte/icons/sun';
 
+	import { enhanceAuthForm } from '$lib/auth/enhance.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import OfflineIndicator from '$lib/pwa/OfflineIndicator.svelte';
 	import { auth } from '$lib/state/auth.svelte.js';
@@ -17,21 +17,8 @@
 	/**
 	 * Logging out is a form post to `/logout`, not a link: a GET that ends a session
 	 * would be triggered by any prefetch or link scanner that touched it.
-	 *
-	 * `invalidateAll` on the way out is what makes the root layout re-ask
-	 * `/api/v1/me`, so the store forgets the user rather than showing a stale name on
-	 * the login page.
-	 *
-	 * @type {import('$app/forms').SubmitFunction}
 	 */
-	const submitLogout =
-		() =>
-		async ({ result }) => {
-			// The target is the server action's own `redirect()` — already built and
-			// validated there, so there is no route literal here for `resolve()` to take.
-			// eslint-disable-next-line svelte/no-navigation-without-resolve
-			if (result.type === 'redirect') await goto(result.location, { invalidateAll: true });
-		};
+	const submitLogout = enhanceAuthForm();
 </script>
 
 <header
@@ -75,6 +62,13 @@
 					{auth.user.displayName}
 				</span>
 
+				<!--
+					Not in `nav.js` with Browse and Rate, on purpose: that list is the
+					app's top-level destinations, and everything in it is also a tab in the
+					mobile bottom bar. `/admin` is neither — it is a tool a minority of
+					accounts ever see, and putting it in the tab bar would give a
+					two-destination app a third tab that most people cannot open.
+				-->
 				{#if auth.isAdmin}
 					<Button href={resolve('/admin')} variant="ghost" size="sm">Admin</Button>
 				{/if}

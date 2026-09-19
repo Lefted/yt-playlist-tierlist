@@ -19,6 +19,7 @@ import {
 	redeemInvite,
 	revokeInvite
 } from './invites.js';
+import { authenticate } from './login.js';
 import { verifyPassword } from './password.js';
 import {
 	createSession,
@@ -145,6 +146,20 @@ describeDb('accounts against a real database', () => {
 			expect(await bootstrapAdmin(db, { email: 'owner@example.com', password: null })).toBe(null);
 			expect(await countUsers(db)).toBe(0);
 		});
+
+		it('refuses a password below the minimum rather than creating a weak admin', async () => {
+			await expect(
+				bootstrapAdmin(db, { email: 'owner@example.com', password: 'short' })
+			).rejects.toThrow(/at least 10/);
+			expect(await countUsers(db)).toBe(0);
+		});
+
+		it('refuses an address that is not one', async () => {
+			await expect(
+				bootstrapAdmin(db, { email: 'owner', password: 'a long enough password' })
+			).rejects.toThrow(/not an email/);
+			expect(await countUsers(db)).toBe(0);
+		});
 	});
 
 	describe('accounts', () => {
@@ -213,6 +228,66 @@ describeDb('accounts against a real database', () => {
 		});
 	});
 
+	describe('logging in', () => {
+		it('accepts the right password, whatever case the address was typed in', async () => {
+			const user = await someone();
+
+			await expect(
+				authenticate(db, '  MORITZ@Example.com ', 'correct horse battery staple')
+			).resolves.toEqual({
+				id: user.id,
+				email: 'moritz@example.com',
+				displayName: 'Moritz',
+				role: 'user'
+			});
+		});
+
+		it('refuses a wrong password', async () => {
+			await someone();
+
+			expect(await authenticate(db, 'moritz@example.com', 'Correct horse battery staple')).toBe(
+				null
+			);
+		});
+
+		it('refuses an address that has no account', async () => {
+			expect(await authenticate(db, 'nobody@example.com', 'correct horse battery staple')).toBe(
+				null
+			);
+		});
+
+		it('refuses a disabled account even with the right password', async () => {
+			const user = await someone();
+			await setUserDisabled(db, user.id, true);
+
+			expect(await authenticate(db, 'moritz@example.com', 'correct horse battery staple')).toBe(
+				null
+			);
+
+			// …and takes it back when the account is enabled again.
+			await setUserDisabled(db, user.id, false);
+			expect(await authenticate(db, 'moritz@example.com', 'correct horse battery staple')).not.toBe(
+				null
+			);
+		});
+
+		it('refuses an empty field without going near the database', async () => {
+			await someone();
+
+			expect(await authenticate(db, '', 'correct horse battery staple')).toBe(null);
+			expect(await authenticate(db, 'moritz@example.com', '')).toBe(null);
+			expect(await authenticate(db, null, undefined)).toBe(null);
+		});
+
+		it('never hands back the password hash', async () => {
+			await someone();
+
+			const user = await authenticate(db, 'moritz@example.com', 'correct horse battery staple');
+
+			expect(user).not.toHaveProperty('passwordHash');
+		});
+	});
+
 	describe('sessions', () => {
 		it('resolves a cookie token to its account', async () => {
 			const user = await someone();
@@ -226,7 +301,7 @@ describeDb('accounts against a real database', () => {
 				displayName: 'Moritz',
 				role: 'user'
 			});
-			expect(session?.sessionId).toBe(hashToken(token));
+			expect(session?.session.id).toBe(hashToken(token));
 			expect(session?.refreshed).toBe(false);
 		});
 
@@ -263,7 +338,7 @@ describeDb('accounts against a real database', () => {
 			const fresh = await loadSession(db, token);
 
 			expect(fresh?.refreshed).toBe(true);
-			expect(fresh?.expiresAt.getTime()).toBeGreaterThan(expiresAt.getTime());
+			expect(fresh?.session.expiresAt.getTime()).toBeGreaterThan(expiresAt.getTime());
 
 			// Straight afterwards there is nothing to slide any more.
 			expect((await loadSession(db, token))?.refreshed).toBe(false);
@@ -387,6 +462,19 @@ describeDb('accounts against a real database', () => {
 			).rejects.toThrow();
 
 			expect(await findUserByEmail(db, 'loser@example.com')).toBe(null);
+		});
+
+		it('refuses to revoke a used invite, so the record of who joined survives', async () => {
+			const admin = await someone({ email: 'admin@example.com', role: 'admin' });
+			const newcomer = await someone({ email: 'new@example.com' });
+			const { token } = await createInvite(db, { createdBy: admin.id });
+			const invite = await findInviteByToken(db, token);
+			const inviteId = /** @type {string} */ (invite?.id);
+
+			await redeemInvite(db, inviteId, newcomer.id);
+
+			expect(await revokeInvite(db, inviteId)).toBe(false);
+			expect((await findInviteByToken(db, token))?.usedBy).toBe(newcomer.id);
 		});
 
 		it('revokes an open invite and then has nothing left to revoke', async () => {
