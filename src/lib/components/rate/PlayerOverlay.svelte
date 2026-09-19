@@ -6,11 +6,22 @@
 	 * `components/Player.svelte`), because nothing outside that element is on screen
 	 * — and the sticky tier bar of the Rate page is outside it.
 	 *
-	 * It sits at the top: YouTube's own control bar owns the bottom edge, and
-	 * covering the seek bar would cost more than it gives. The strip stays
-	 * pointer-reactive even while the controls are faded out, so moving the mouse
-	 * into it brings them back; movement over the video itself goes to the
-	 * cross-origin iframe and never reaches us.
+	 * It stays in the top *left*, and it is exactly as big as its controls — there is
+	 * no full-width strip and no page-wide gradient, because everything the overlay
+	 * covers is a part of the video the mouse can no longer reach (issue #13):
+	 *
+	 * - the bottom edge belongs to YouTube's own control bar, so the overlay is up top;
+	 * - the top centre belongs to the browser: Chrome parks its "Press Esc to exit
+	 *   full screen" pill there, roughly over the top 4 rem, and it used to land on
+	 *   the D/F buttons. Hence the 4 rem offset from the top and the anchor on the left;
+	 * - the top right belongs to the embed (volume, captions, settings), so the group
+	 *   keeps 14 rem clear of the right edge wherever there is width to spare.
+	 *
+	 * The group is the only hit target: it has no container to swallow clicks meant
+	 * for the video. It stays pointer-reactive even while faded out, so moving the
+	 * mouse into it brings the controls back — the inner column is what goes `inert`,
+	 * not this box. Movement over the video itself goes to the cross-origin iframe
+	 * and never reaches us, which is a known limitation.
 	 */
 	import Minimize from '@lucide/svelte/icons/minimize';
 	import SkipBack from '@lucide/svelte/icons/skip-back';
@@ -71,21 +82,30 @@
 	]);
 </script>
 
-<!-- The strip is not a control itself; it only notices that the pointer is around. -->
+<!--
+	The box is not a control itself; it only notices that the pointer is around. Its
+	own backdrop is what keeps the buttons readable now that the gradient is gone.
+
+	`w-fit` plus the wrapping button row is what makes it survive a phone in landscape:
+	the group is never wider than its content, and the content folds into a second row
+	long before it runs into the right-hand `max-w` budget. That budget is the full
+	width minus the margin below `sm`, where reserving 14 rem would leave too little to
+	lay out at all — down there the 4 rem top offset alone clears the embed's buttons.
+-->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-	class="absolute inset-x-0 top-0 z-10 flex justify-center bg-gradient-to-b from-black/70 to-transparent p-2 transition-opacity duration-200 sm:p-3"
+	class="absolute top-16 left-3 z-10 flex w-fit max-w-[calc(100%-1.5rem)] flex-col items-start gap-2 rounded-xl bg-black/60 p-2 backdrop-blur transition-opacity duration-200 sm:max-w-[calc(100%-14rem)] sm:p-3"
 	class:opacity-0={!visible}
 	onpointermove={() => onactivity?.()}
 >
-	<div class="flex max-w-full flex-col items-center gap-2" inert={!visible} aria-hidden={!visible}>
+	<div class="flex max-w-full flex-col items-start gap-2" inert={!visible} aria-hidden={!visible}>
 		{#if title}
-			<p class="line-clamp-1 max-w-[80vw] text-center text-sm font-medium text-white/90">
+			<p class="line-clamp-1 max-w-full text-sm font-medium text-white/90">
 				{title}
 			</p>
 		{/if}
 
-		<div class="flex flex-wrap items-center justify-center gap-1.5">
+		<div class="flex flex-wrap items-center gap-1.5">
 			{#each TIERS as tier (tier.rating)}
 				<button
 					type="button"
