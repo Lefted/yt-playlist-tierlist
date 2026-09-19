@@ -72,15 +72,16 @@ spec:
             # address for every request, and the login rate limiter's per-IP
             # bucket becomes one global bucket: ten failed logins anywhere would
             # lock the whole installation out for fifteen minutes (#16).
-            # XFF_DEPTH counts trusted proxies from the right, so 1 is "Traefik
-            # is the only hop that appends to X-Forwarded-For". If Cloudflare is
-            # ever switched from DNS-only to proxied, this has to become 2 —
-            # check `sessions.ip` after such a change: it should hold real
-            # client addresses, not the ingress or an edge.
+            # XFF_DEPTH counts trusted proxies from the right. lefted.dev is a
+            # proxied (orange-cloud) Cloudflare zone, so two hops append to
+            # X-Forwarded-For: Cloudflare's edge adds the client, Traefik adds
+            # the edge. Hence 2. If the record is ever switched to DNS-only,
+            # this has to become 1 — check `sessions.ip` after such a change:
+            # it should hold real client addresses, not the ingress or an edge.
             - name: ADDRESS_HEADER
               value: 'x-forwarded-for'
             - name: XFF_DEPTH
-              value: '1'
+              value: '2'
           # Migrations run on boot, so the first request can be minutes away on
           # a big one. The startupProbe holds the liveness probe off until the
           # app answers at all — without it, liveness (15s + 3 × 30s) would kill
