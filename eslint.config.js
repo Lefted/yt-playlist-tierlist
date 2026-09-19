@@ -34,6 +34,7 @@ export default [
 		}
 	},
 	{
-		ignores: ['build/', '.svelte-kit/', 'dist/', 'node_modules/']
+		// `.claude/` holds agent worktrees: full checkouts that must not be linted twice.
+		ignores: ['build/', '.svelte-kit/', 'dist/', 'node_modules/', '.claude/']
 	}
 ];
