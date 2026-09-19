@@ -1,0 +1,34 @@
+# Postgres for local development and for the `*.db.test.js` integration tests.
+#
+#   podman compose -f deploy/docker-compose.yml up -d   (or `docker compose`)
+#
+# Postgres 16 and the amv/amv/amv triple mirror the cluster (see #14), so a query
+# that works here works there. Nothing production-like otherwise: the credentials
+# are in this file on purpose, and the port is published on localhost.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: amv-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: amv
+      POSTGRES_PASSWORD: amv
+      POSTGRES_DB: amv
+    ports:
+      # Overridable, because a machine that already runs a Postgres on 5432 would
+      # otherwise refuse to start this one:
+      #   POSTGRES_PORT=55432 podman compose -f deploy/docker-compose.yml up -d
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - amv-db-data:/var/lib/postgresql/data
+    healthcheck:
+      # `-d amv` because pg_isready otherwise probes a database named after the user's
+      # role only by accident; being explicit keeps the check honest.
+      test: ['CMD-SHELL', 'pg_isready -U amv -d amv']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  amv-db-data:

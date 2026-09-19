@@ -8,9 +8,10 @@ shuffle, and rate any card in place. **Rate** is the focused loop — the video
 plays, you press a key, the next one starts. Ratings persist in the browser and
 can be exported to a JSON file and restored on another device.
 
-The app is a pure client-side SPA: no server, no account, no database. Your API
-key and your ratings never leave the browser, and it installs as a PWA on
-desktop and phone.
+Every page is rendered in the browser (`ssr = false`), and your ratings still live
+in `localStorage` — but the app is served by its own small Node server now, which
+owns the database the accounts and the shared library are moving into (#14). It
+installs as a PWA on desktop and phone.
 
 ## Getting a YouTube Data API key
 
@@ -46,7 +47,8 @@ library keeps working without a key.
 ```bash
 npm install         # install dependencies
 npm run dev         # dev server on http://localhost:5173
-npm run build       # static build into build/ (index.html + _app/)
+npm run build       # build the node server into build/
+npm start           # run that build: node build, port 3000
 npm run preview     # serve the production build locally
 npm run check       # svelte-check (JSDoc types)
 npm run lint        # prettier --check + eslint
@@ -54,10 +56,105 @@ npm run format      # prettier --write
 npm test            # vitest run
 npm run test:watch  # vitest in watch mode
 npm run icons       # re-rasterize the app icons into static/ (needs sharp)
+npm run db:generate # write a migration for the current schema.js
+npm run db:migrate  # apply pending migrations once, by hand
+npm run db:studio   # drizzle studio against DATABASE_URL
 ```
 
 `npx knip` reports unreachable files and unused dependencies; it runs against
 this project without extra configuration.
+
+## Running the server
+
+The app is a SvelteKit build on
+[`@sveltejs/adapter-node`](https://svelte.dev/docs/kit/adapter-node): `npm run
+build` writes `build/`, and `node build` serves it on `PORT` (3000 by default).
+It needs a Postgres.
+
+### Environment
+
+`.env.example` documents every variable; copy it and fill in what you need:
+
+```bash
+cp .env.example .env
+```
+
+`DATABASE_URL` is the only one development insists on. `NODE_ENV=production`
+additionally requires `YOUTUBE_API_KEY` and `ORIGIN` — the server refuses to start
+with a clear list of what is missing rather than failing on the first request that
+needs it (`src/lib/server/config.js`).
+
+`vite dev`, `vite build` and the `db:*` scripts read `.env`. **`node build` does
+not** — give it a real environment (compose, Kubernetes, `VAR=… node build`).
+
+### Postgres for development
+
+```bash
+podman compose -f deploy/docker-compose.yml up -d    # or: docker compose
+```
+
+Postgres 16, database/user/password `amv`, published on 5432 — the same triple the
+cluster uses. If 5432 is taken on your machine, start it elsewhere with
+`POSTGRES_PORT=55432 podman compose -f deploy/docker-compose.yml up -d` and put
+that port in `DATABASE_URL`.
+
+```bash
+npm run dev     # http://localhost:5173, migrations applied on first request
+npm run build && npm start   # http://localhost:3000
+```
+
+### Migrations
+
+The schema is `src/lib/server/db/schema.js`; `npm run db:generate` diffs it and
+writes SQL plus a journal entry into `drizzle/`. Commit both — they ship with the
+image.
+
+Migrations are applied **on boot**, in the SvelteKit `init` hook
+(`src/hooks.server.js`), under a Postgres advisory lock so two replicas starting
+together cannot race. A failure there exits the process non-zero, which is what
+keeps a broken migration from rolling over pods that still work.
+`npm run db:migrate` does the same by hand, e.g. against a database no app is
+pointed at yet.
+
+### Endpoints
+
+| Route          | Answers                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------ |
+| `/healthz`     | `200 {"ok":true}`, without touching the database — the liveness probe                                        |
+| `/api/v1/meta` | `{ commit, buildTime, startedAt, dbSchemaVersion, binarySchemaVersion }`, 503 if the database is unreachable |
+
+`dbSchemaVersion` counts the migrations the database has recorded,
+`binarySchemaVersion` the ones this build ships: equal after a healthy deploy.
+Failures everywhere under `/api/v1` share one shape, `{ error: { code, message } }`
+(`src/lib/server/http.js`).
+
+### Database integration tests
+
+The `*.db.test.js` suites need a real Postgres and **wipe** the database they are
+given, so they only run when `TEST_DATABASE_URL` is set; otherwise `npm test`
+skips them with a note.
+
+```bash
+TEST_DATABASE_URL=postgres://amv:amv@localhost:5432/amv npm test
+```
+
+### Container
+
+```bash
+podman build \
+  --build-arg GIT_SHA=$(git rev-parse --short HEAD) \
+  --build-arg BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  -t amv-tierlist:dev .
+
+podman run --rm --network deploy_default -p 3000:3000 \
+  -e DATABASE_URL=postgres://amv:amv@db:5432/amv \
+  -e YOUTUBE_API_KEY=… -e ORIGIN=http://localhost:3000 \
+  amv-tierlist:dev
+```
+
+`node:22.23-alpine`, two stages, runs as the unprivileged `node` user (uid 1000)
+and writes nothing inside the image. The two build args are what `/api/v1/meta`
+reports back as `commit` and `buildTime`; they default to `unknown`.
 
 ## Keyboard shortcuts
 
@@ -167,7 +264,8 @@ page under you mid-video.
 
 ## Your data
 
-Everything lives in your browser's `localStorage`, under two keys:
+Everything still lives in your browser's `localStorage`, under two keys — the
+server has a database, but nothing of yours is in it yet (that is #17):
 
 | Key                | Contents                                                                                                               |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
@@ -201,15 +299,18 @@ the session and loses the ratings — so:
 - [SvelteKit 2](https://svelte.dev/docs/kit) + [Svelte 5](https://svelte.dev/docs/svelte) (runes, JavaScript + JSDoc)
 - [Tailwind CSS 4](https://tailwindcss.com) (CSS-first config in `src/app.css`)
 - [shadcn-svelte](https://shadcn-svelte.com) components (`src/lib/components/ui/`) on [bits-ui](https://bits-ui.com) 2
-- [`@sveltejs/adapter-static`](https://svelte.dev/docs/kit/adapter-static) with an `index.html` fallback
+- [`@sveltejs/adapter-node`](https://svelte.dev/docs/kit/adapter-node) — `node build` on port 3000, pages still client-rendered
+- [Drizzle ORM](https://orm.drizzle.team) + [postgres.js](https://github.com/porsager/postgres) against Postgres 16, migrations applied on boot
 - [`@vite-pwa/sveltekit`](https://vite-pwa-org.netlify.app/frameworks/sveltekit) for the web app manifest and service worker
 - [Vitest](https://vitest.dev) for unit tests
 
 ## Deployment
 
-`npm run build` produces a fully static `build/` folder. Serve it from any static
-host, with a rewrite of unknown paths to `index.html` (SPA fallback) — `/rate` is
-a client route and must not 404 on a cold load.
+The app is deployed as a container: `Dockerfile` builds it, `node build` serves it
+on port 3000, and it needs `DATABASE_URL`, `YOUTUBE_API_KEY` and `ORIGIN` in its
+environment (see [Running the server](#running-the-server)). Point a reverse proxy
+at that port; the routes are real server routes, so nothing needs an SPA rewrite
+rule any more.
 
 The manifest's `scope` and `start_url` assume the app lives at the site root.
 
@@ -295,6 +396,27 @@ place; the configuration lives in `components.json`.
   cover is a contract rather than taste: `PlayerOverlay.test.js` renders it through
   `svelte/server` and holds that structure down. Tests elsewhere stick to the pure
   modules — a render test earns its place only where the markup _is_ the behaviour.
+
+### Server
+
+Everything under `src/lib/server/` is server-only — SvelteKit refuses to bundle it
+into the client, which is what keeps the database URL and the YouTube key on this
+side.
+
+- `src/hooks.server.js` — boot: read the config, apply the migrations, then serve.
+  Exits non-zero if either fails.
+- `src/lib/server/config.js` — the environment as one validated, memoised object
+  (`readConfig` is pure and is what the tests drive); `ConfigError` lists every
+  offending variable at once.
+- `src/lib/server/db/schema.js` — the Drizzle tables; `db/index.js` — the lazily
+  opened postgres.js pool and Drizzle handle; `db/migrations.js` — applying the
+  `drizzle/` folder under an advisory lock and counting what shipped versus what
+  landed.
+- `src/lib/server/http.js` — `json` / `jsonError`, the one response shape the API
+  uses; `src/lib/server/meta.js` — the `/api/v1/meta` payload and this process'
+  start time.
+- `src/routes/healthz/+server.js` (no database) and
+  `src/routes/api/v1/meta/+server.js` (needs one, 503 without it).
 
 The icons in `static/` are committed, so the build never needs `sharp`. Re-run
 `npm run icons` only after editing the motif in `scripts/generate-icons.mjs`.

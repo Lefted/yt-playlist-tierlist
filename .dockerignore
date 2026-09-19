@@ -1,0 +1,25 @@
+# Keep the build context small, and keep host state out of the image.
+
+# Rebuilt for Alpine inside the build stage; the host copy has the wrong binaries.
+node_modules
+
+.git
+.gitignore
+
+# Build output of a previous local run.
+.svelte-kit
+build
+
+# Secrets. Never, under any circumstance, in a layer.
+.env
+.env.*
+
+# Agent worktrees: full checkouts of this repo.
+.claude
+
+# Deployment and documentation are for humans, not for the runtime.
+deploy
+docs
+*.md
+Dockerfile
+.dockerignore

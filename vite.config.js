@@ -17,11 +17,13 @@ export default defineConfig({
 			// `virtual:pwa-register/svelte`; injecting a second registration would race it.
 			injectRegister: null,
 			kit: {
-				// Mirrors `fallback: 'index.html'` in svelte.config.js. adapter-static runs
-				// *after* this plugin, so the fallback page does not exist yet when the
-				// precache manifest is built; `spa` adds it as an explicit entry, revisioned
-				// from `_app/version.json`. `fallbackMapping` is the URL the server answers
-				// it under, which has to be the `navigateFallback` below.
+				// Every page is client-rendered (`ssr = false`), so one precached shell serves
+				// them all. The shell is not a file any more — adapter-node renders it per
+				// request — so the two options below are what puts it in the precache manifest
+				// anyway: `spa` adds an explicit entry, revisioned from `_app/version.json`,
+				// and `fallbackMapping` is the URL the server answers it under, which has to
+				// be the `navigateFallback` below. `adapterFallback` only names that entry;
+				// the plugin requires it to be set for `spa` to take effect.
 				adapterFallback: 'index.html',
 				spa: { fallbackMapping: '/' }
 			},
