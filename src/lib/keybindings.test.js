@@ -117,7 +117,8 @@ describe('the default bindings', () => {
 		expect(DEFAULT_KEYBINDINGS.next).toEqual(['n']);
 		expect(DEFAULT_KEYBINDINGS.previous).toEqual(['p']);
 		expect(DEFAULT_KEYBINDINGS.replay).toEqual(['r']);
-		expect(DEFAULT_KEYBINDINGS.undo).toEqual(['u', 'Backspace', 'Ctrl+z']);
+		// Both undo chords: whichever the keyboard has is the one the hand reaches for.
+		expect(DEFAULT_KEYBINDINGS.undo).toEqual(['u', 'Backspace', 'Ctrl+z', 'Meta+z']);
 		expect(DEFAULT_KEYBINDINGS.loop).toEqual(['Shift+l']);
 	});
 
@@ -140,7 +141,7 @@ describe('the default bindings', () => {
 describe('normalizeKeybindings', () => {
 	it('fills a missing action from the defaults', () => {
 		expect(normalizeKeybindings({ next: ['x'] }).rateS).toEqual(['s']);
-		expect(normalizeKeybindings({}).undo).toEqual(['u', 'Backspace', 'Ctrl+z']);
+		expect(normalizeKeybindings({}).undo).toEqual(['u', 'Backspace', 'Ctrl+z', 'Meta+z']);
 	});
 
 	it('drops an action nobody knows', () => {

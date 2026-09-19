@@ -309,8 +309,9 @@ export const BINDABLE_ACTIONS = [
  * other YouTube key is either a key the Rate page proxies (`k`, `m`, `j`, `l`, the
  * arrows) or one the rating layer never claimed.
  *
- * `Cmd+Z` is deliberately not here: the ticket's table says `u`, `Backspace`,
- * `Ctrl+Z`, and anyone who wants the fourth can bind it in the editor.
+ * Undo carries both `Ctrl+Z` and `Cmd+Z`, as the fixed mapping before it did:
+ * whichever one a keyboard has is the one that hand reaches for, and losing undo
+ * on macOS is not a default anybody would choose.
  *
  * @type {Readonly<Keybindings>}
  */
@@ -325,7 +326,7 @@ export const DEFAULT_KEYBINDINGS = Object.freeze(
 		next: Object.freeze(['n']),
 		previous: Object.freeze(['p']),
 		replay: Object.freeze(['r']),
-		undo: Object.freeze(['u', 'Backspace', 'Ctrl+z']),
+		undo: Object.freeze(['u', 'Backspace', 'Ctrl+z', 'Meta+z']),
 		loop: Object.freeze(['Shift+l']),
 		fullscreen: Object.freeze(['f'])
 	})

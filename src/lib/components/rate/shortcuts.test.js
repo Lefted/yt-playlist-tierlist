@@ -181,6 +181,7 @@ describe('shortcutFor with the default bindings', () => {
 		expect(shortcutFor(keydown('u'))).toEqual({ type: 'undo' });
 		expect(shortcutFor(keydown('Backspace'))).toEqual({ type: 'undo' });
 		expect(shortcutFor(keydown('z', { ctrlKey: true }))).toEqual({ type: 'undo' });
+		expect(shortcutFor(keydown('Z', { metaKey: true }))).toEqual({ type: 'undo' });
 	});
 
 	it('leaves redo and every unbound modifier combination to the browser', () => {
@@ -190,8 +191,8 @@ describe('shortcutFor with the default bindings', () => {
 		expect(shortcutFor(keydown('s', { metaKey: true }))).toBeNull();
 		expect(shortcutFor(keydown('n', { altKey: true }))).toBeNull();
 		expect(shortcutFor(keydown('z', { ctrlKey: true, altKey: true }))).toBeNull();
-		// `Cmd+Z` is only undo because someone bound it; by default it is not.
-		expect(shortcutFor(keydown('Z', { metaKey: true }))).toBeNull();
+		// Both undo chords are exact: adding a modifier is no longer one of them.
+		expect(shortcutFor(keydown('z', { metaKey: true, shiftKey: true }))).toBeNull();
 	});
 
 	it('ignores shift plus an unbound key', () => {
@@ -376,7 +377,7 @@ describe('shortcutKeys', () => {
 		expect(keys.rateS).toEqual(['S']);
 		expect(keys.rateF).toEqual(['Shift+F']);
 		expect(keys.fullscreen).toEqual(['F']);
-		expect(keys.undo).toEqual(['U', '⌫', 'Ctrl+Z']);
+		expect(keys.undo).toEqual(['U', '⌫', 'Ctrl+Z', 'Meta+Z']);
 		expect(keys.loop).toEqual(['Shift+L']);
 	});
 

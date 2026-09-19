@@ -89,17 +89,17 @@ it off, the tier bar drops its `<kbd>` hints and the help popover says so.
 
 Defaults — the letters, with `f` left to YouTube:
 
-| Keys                           | Action                                |
-| ------------------------------ | ------------------------------------- |
-| `S` `A` `B` `C` `D`            | Rate the current video with that tier |
-| `Shift`+`F`                    | Rate it F                             |
-| `F`                            | Fullscreen (as on YouTube)            |
-| `N`                            | Next video                            |
-| `P`                            | Previous video                        |
-| `R`                            | Replay from the start                 |
-| `U`, `Backspace` or `Ctrl`+`Z` | Undo the last rating                  |
-| `Shift`+`L`                    | Loop the current video                |
-| `?`                            | Show the shortcut list                |
+| Keys                                    | Action                                |
+| --------------------------------------- | ------------------------------------- |
+| `S` `A` `B` `C` `D`                     | Rate the current video with that tier |
+| `Shift`+`F`                             | Rate it F                             |
+| `F`                                     | Fullscreen (as on YouTube)            |
+| `N`                                     | Next video                            |
+| `P`                                     | Previous video                        |
+| `R`                                     | Replay from the start                 |
+| `U`, `Backspace`, `Ctrl`+`Z` or `⌘`+`Z` | Undo the last rating                  |
+| `Shift`+`L`                             | Loop the current video                |
+| `?`                                     | Show the shortcut list                |
 
 Every YouTube key therefore keeps its meaning by default; the F tier is the one
 letter that has to take a modifier, and `L` is the player's "forward 10 s", which
@@ -129,8 +129,6 @@ shows. All of them read the same bindings, so no `<kbd>`, tooltip or help row ca
 promise a key the page does not answer — the player rows even drop the keys a
 binding has taken from them, so `K` stops being offered for play/pause the moment a
 tier claims it.
-
-`Cmd`+`Z` is not a default (the table above is), but the editor will bind it.
 
 **Undo** takes back the last rating (and a manual _Mark unavailable_), restores
 the previous tier and jumps back to that video, up to 50 steps back. It is also
