@@ -1,0 +1,113 @@
+# The SvelteKit app (adapter-node) behind https://amv.lefted.dev.
+#
+# One image serves both the pages and `/api/v1/*`, so the browser talks to its
+# own origin and no CORS configuration exists anywhere. Deployed by
+# scripts/deploy.sh; the contract it implements is docs/deploy/deploys.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: amv-tierlist
+  namespace: amv
+  labels:
+    app: amv-tierlist
+spec:
+  replicas: 2
+  # A new pod must go Ready (boot + migrate + /healthz) before any old pod is
+  # removed: zero-downtime, and an image that crashes on boot can never take
+  # over — the old pods keep serving. For a deploy carrying a DESTRUCTIVE
+  # migration use `scripts/deploy.sh --recreate`; see docs/deploy/deploys.md.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: amv-tierlist
+  template:
+    metadata:
+      labels:
+        app: amv-tierlist
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # node:22-alpine's `node` user is uid/gid 1000. Repeating it numerically
+        # is not redundant: the kubelet cannot enforce `runAsNonRoot` when the
+        # image declares its user by *name*, and refuses to start the container
+        # instead. Keep these in sync with the Dockerfile's USER.
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          # Immutable git-short-SHA tag — NOT :latest. This line is the source
+          # of truth for what is deployed and is rewritten by scripts/deploy.sh
+          # on every deploy, then committed. An immutable tag is why
+          # IfNotPresent is enough. The placeholder below is replaced by the
+          # first real deploy. See docs/deploy/deploys.md.
+          image: localhost:5000/amv-tierlist:0000000
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+          # DATABASE_URL, YOUTUBE_API_KEY, ADMIN_EMAIL, ADMIN_PASSWORD — hand
+          # created, never in git. See secrets.env.example.
+          envFrom:
+            - secretRef:
+                name: amv-env
+          # Non-secret settings stay in the manifest so a reader can see them
+          # without cluster access.
+          env:
+            - name: PORT
+              value: '3000'
+            - name: NODE_ENV
+              value: 'production'
+            # adapter-node needs the public origin to accept form posts and to
+            # build absolute URLs; a wrong value shows up as 403 on every POST.
+            - name: ORIGIN
+              value: 'https://amv.lefted.dev'
+          # /healthz is DB-free on purpose: a probe must not go red because
+          # Postgres is briefly busy, and it must stay cheap at this frequency.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: '100m'
+              memory: '128Mi'
+            limits:
+              cpu: '500m'
+              memory: '512Mi'
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ['ALL']
+            # readOnlyRootFilesystem is NOT set: Node writes to /tmp and this
+            # has not been verified against the image yet. Turn it on together
+            # with an emptyDir at /tmp once someone has confirmed a boot with
+            # it — don't flip it blind, the failure is a CrashLoopBackOff.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: amv-tierlist
+  namespace: amv
+spec:
+  type: ClusterIP
+  selector:
+    app: amv-tierlist
+  ports:
+    - port: 80
+      targetPort: 3000
+      name: http

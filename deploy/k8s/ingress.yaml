@@ -1,0 +1,46 @@
+# Traefik routing for https://amv.lefted.dev.
+#
+# k3s ships Traefik on :80/:443. Cloudflare proxies the host and already
+# redirects plaintext at the edge ("Always Use HTTPS"); this Middleware is the
+# backstop for any request that reaches the origin without going through it.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-to-https
+  namespace: amv
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: amv
+  namespace: amv
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    # Traefik addresses a Middleware CRD as <namespace>-<name>@kubernetescrd —
+    # the namespace prefix is required, and a missing one fails open (no
+    # redirect) rather than loudly.
+    traefik.ingress.kubernetes.io/router.middlewares: amv-redirect-to-https@kubernetescrd
+    traefik.ingress.kubernetes.io/router.tls: 'true'
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - amv.lefted.dev
+      secretName: lefted-wildcard-tls
+  rules:
+    # One host, one path: the app and its /api/v1/* live in the same process,
+    # so everything goes to the same Service and nothing needs CORS.
+    - host: amv.lefted.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: amv-tierlist
+                port:
+                  number: 80

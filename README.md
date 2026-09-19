@@ -213,6 +213,11 @@ a client route and must not 404 on a cold load.
 
 The manifest's `scope` and `start_url` assume the app lives at the site root.
 
+Production runs on a k3s VPS at `https://amv.lefted.dev`: manifests in
+`deploy/k8s/`, the guarded deploy in `scripts/deploy.sh`. First-time setup is
+[`docs/deploy/runbook.md`](docs/deploy/runbook.md), the deploy contract
+[`docs/deploy/deploys.md`](docs/deploy/deploys.md).
+
 ## Adding UI components
 
 ```bash

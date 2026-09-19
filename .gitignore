@@ -16,6 +16,9 @@ Thumbs.db
 !.env.example
 !.env.test
 
+# Cluster credentials — only secrets.env.example is committed
+deploy/k8s/secrets.env
+
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*

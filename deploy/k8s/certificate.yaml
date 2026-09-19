@@ -1,0 +1,41 @@
+# Wildcard TLS certificate for this namespace.
+#
+# NOTE: there is no ClusterIssuer in this file, and that is deliberate. The
+# ClusterIssuer `letsencrypt-lefted` is SHARED INFRASTRUCTURE that already
+# exists on the cluster and is Ready (Let's Encrypt production, Cloudflare
+# DNS-01, token Secret `cloudflare-lefted-api-token` in the `cert-manager`
+# namespace, solver scoped to the `lefted.dev` zone). Applying our own copy
+# would let this repo silently overwrite an object other apps depend on. The
+# runbook carries a reference copy for the day it has to be recreated:
+# docs/deploy/runbook.md, "The ClusterIssuer (shared, already exists)".
+#
+# Why a Certificate per namespace: a TLS Secret is namespaced, so Traefik can
+# only read `lefted-wildcard-tls` from the namespace the Ingress lives in. The
+# other lefted.dev apps have their own identical Certificate in their own
+# namespace; this one is `amv`'s copy, not a duplicate to clean up.
+#
+# To debug issuance without burning Let's Encrypt production rate limits, point
+# `issuerRef.name` at a staging issuer instead — see the runbook section above
+# for the staging ClusterIssuer manifest.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: lefted-wildcard
+  namespace: amv
+spec:
+  secretName: lefted-wildcard-tls
+  issuerRef:
+    name: letsencrypt-lefted
+    kind: ClusterIssuer
+  commonName: '*.lefted.dev'
+  # The apex is included so the same Secret also covers `lefted.dev` itself —
+  # a wildcard does not match the bare domain.
+  dnsNames:
+    - 'lefted.dev'
+    - '*.lefted.dev'
+  duration: 2160h # 90d
+  renewBefore: 720h # 30d
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always

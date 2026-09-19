@@ -1,0 +1,84 @@
+# Postgres for the app: a headless Service `amv-db` plus a single-replica
+# StatefulSet running plain `postgres:16-alpine` — no operator, the same shape
+# the CoSpace project runs on this cluster.
+#
+# Credentials come from the hand-created Secret `postgres-credentials`
+# (see secrets.env.example and docs/deploy/runbook.md). `POSTGRES_PASSWORD` is
+# read by `initdb` only, i.e. on the FIRST boot against an empty volume; a later
+# change needs `ALTER USER` — see docs/deploy/runbook.md, "Rotate the Postgres
+# password".
+apiVersion: v1
+kind: Service
+metadata:
+  name: amv-db
+  namespace: amv
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      name: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: amv
+spec:
+  serviceName: amv-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          ports:
+            - containerPort: 5432
+              name: postgres
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+          # `pg_isready` does not authenticate, so a green probe only means the
+          # server accepts connections — it says nothing about the password
+          # matching `DATABASE_URL`. `/api/v1/meta` is what proves that.
+          readinessProbe:
+            exec:
+              command: ['pg_isready', '-U', 'amv']
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          # Deliberately slow and forgiving: crash recovery after an unclean
+          # shutdown can keep the server unreachable for a while, and killing it
+          # mid-recovery would only restart the recovery.
+          livenessProbe:
+            exec:
+              command: ['pg_isready', '-U', 'amv']
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ['ReadWriteOnce']
+        # `local-path-retain` is the cluster's local-path provisioner with
+        # reclaimPolicy Retain: deleting this StatefulSet or its PVC leaves the
+        # data on the node instead of wiping it. There is no backup yet
+        # (docs/deploy/runbook.md, "Backups"), so this is the only thing between
+        # a stray `kubectl delete` and total data loss. Do not drop this line to
+        # fall back to the default class.
+        storageClassName: local-path-retain
+        resources:
+          requests:
+            storage: 5Gi
