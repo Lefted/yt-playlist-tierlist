@@ -196,17 +196,22 @@
 		gap, and it would leave the collapsed box bigger than the button it is meant to
 		be. Of that `pl-2.5`, 6 px is the gap to the eye and 4 px is the ring room.
 	-->
-	<div class="flex flex-col items-start gap-2 p-1 pl-2.5">
+	<div class="tight:gap-1 flex flex-col items-start gap-2 p-1 pl-2.5">
 		<!--
 			The cap is what folds the row into the left third of a phone in landscape,
 			where the middle belongs to YouTube's own play cluster: 8 rem takes three 36 px
-			buttons and no more, and with the eye, the gap and the box's padding beside it
-			that puts the right edge at 210 px — just inside the third of a 640 px screen,
-			and well inside it at 780. The box is `w-fit`, so capping the row is what sizes
-			the box; the `max-w` above is left to say one thing only, which is where the
-			embed's own corner buttons start.
+			buttons and no more, so the row comes to about 116 px and the box, with the eye
+			and the padding beside it, to about 200 — inside the 213 px third of a 640 px
+			screen, and well inside the 260 of a 780. The box is `w-fit`, so capping the row
+			is what sizes the box; the `max-w` above is left to say one thing only, which is
+			where the embed's own corner buttons start.
+
+			The gaps close up with it, because the height is what there is least of: four
+			wrapped rows of 36 px put the box's bottom edge at about 270 px of a 360 px
+			screen, which is the room YouTube's progress bar and times need — and the room
+			the "Finished" note below spends when a video ends unrated.
 		-->
-		<div class="tight:max-w-[8rem] flex flex-wrap items-center gap-1.5">
+		<div class="tight:max-w-[8rem] tight:gap-1 flex flex-wrap items-center gap-1.5">
 			{#each TIERS as tier (tier.rating)}
 				<button
 					type="button"
@@ -265,8 +270,10 @@
 	click anywhere else on the video reaches the player. Its backdrop is what keeps the
 	buttons readable now that the page-wide gradient is gone.
 
-	The `max-w` is the right-hand budget of the header comment: 15 rem minus the left
-	margin leaves the embed's corner buttons a clear 14 rem. Below `sm` that would
+	The `max-w` is the one rule here about width alone — hence `sm:`, where the sizes
+	below use the height-aware `tight:`/`roomy:`: the embed's corner buttons are to the
+	right of us whatever the height is. It is the right-hand budget of the header
+	comment: 15 rem minus the left margin leaves them a clear 14 rem. Below `sm` that would
 	leave too little to lay the buttons out in at all, so down there the only reserve
 	is the top offset, which already clears the embed's chrome. `w-fit` and the
 	wrapping button row are what keep a phone in landscape working: the box is only as

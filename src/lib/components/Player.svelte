@@ -179,6 +179,9 @@
 		for (const event of FULLSCREEN_EVENTS) document.addEventListener(event, sync);
 		return () => {
 			for (const event of FULLSCREEN_EVENTS) document.removeEventListener(event, sync);
+			// Torn down while still fullscreen — navigating away mid-video. Nobody will
+			// report the way out after this, so the rotation is given back here.
+			if (was) unlockOrientation(window.screen);
 		};
 	});
 

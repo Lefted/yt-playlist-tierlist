@@ -559,8 +559,15 @@ place; the configuration lives in `components.json`.
   is the only one that is on screen while the player is fullscreen. That overlay
   shares the screen with the browser's and YouTube's own controls, so what it may
   cover is a contract rather than taste: `PlayerOverlay.test.js` renders it through
-  `svelte/server` and holds that structure down. Tests elsewhere stick to the pure
-  modules — a render test earns its place only where the markup _is_ the behaviour.
+  `svelte/server` and holds that structure down.
+- `components/rate/PointerWake.svelte` is the other half of that bargain: while the
+  overlay has faded out, it covers the player with a transparent layer so that the
+  first mouse movement — which the cross-origin iframe would otherwise keep to
+  itself — can bring the overlay back. It exists only on mouse setups and only while
+  the overlay is away; on a touch screen it would swallow the tap the embed needs,
+  which is why its render test pins that it paints nothing until `matchMedia` says
+  there is a mouse. Tests elsewhere stick to the pure modules — a render test earns
+  its place only where the markup, or its absence, _is_ the behaviour.
 
 ### Server
 

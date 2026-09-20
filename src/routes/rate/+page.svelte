@@ -69,7 +69,12 @@
 	/**
 	 * @type {boolean} Something needs the overlay to stay up however long nothing
 	 * happens: a video that ended unrated — the prompt to rate it *is* the overlay —
-	 * or a dialog of ours layered on top.
+	 * or something of ours layered on top.
+	 *
+	 * The help list is the only layer the page can see as state; the toolbar's own
+	 * popovers and the shortcut editor keep theirs. That is enough, because all of
+	 * them are rendered *outside* the element that goes fullscreen and so are not on
+	 * the screen the overlay is on.
 	 */
 	const overlayHeld = $derived(awaitingRating || helpOpen);
 
@@ -171,6 +176,20 @@
 	});
 
 	/**
+	 * A sign of life: show the fullscreen overlay and give it three more seconds.
+	 *
+	 * Guarded here rather than at each of the four call sites, as `recoverFocus` does:
+	 * outside fullscreen there is no overlay, and the signals that feed this — a
+	 * keystroke, the end of a video, the focus leaving the window — all happen there
+	 * too.
+	 *
+	 * @returns {void}
+	 */
+	function wake() {
+		if (fullscreen) overlayEvent('wake');
+	}
+
+	/**
 	 * Feed the overlay's state machine, and act on the one transition the page owes it.
 	 *
 	 * @param {import('$lib/components/rate/overlay-visibility.js').OverlayEvent} event
@@ -195,10 +214,14 @@
 	 * iframe is cross-origin and swallows every event inside it, but moving the focus
 	 * into it makes the window lose the focus, and that we can hear.
 	 *
+	 * Other things blur a window too — switching app or tab, most of all. Waking for
+	 * those is the harmless half of the trade: the overlay comes up on a screen nobody
+	 * is looking at, and fades again three seconds later.
+	 *
 	 * @returns {void}
 	 */
 	function handleWindowBlur() {
-		if (fullscreen) overlayEvent('wake');
+		wake();
 	}
 
 	/** A new video starts unjudged; drop the "it ended" highlight. */
@@ -244,7 +267,7 @@
 	 */
 	function overlayAction(action) {
 		action();
-		overlayEvent('wake');
+		wake();
 		recoverFocus();
 	}
 
@@ -344,7 +367,7 @@
 	/** @returns {void} */
 	function handleEnded() {
 		if (!current) return;
-		if (fullscreen) overlayEvent('wake');
+		wake();
 
 		const rated = current.rating !== null;
 		const action = endedAction({ loop: settings.loop, rated, autoAdvance: settings.autoAdvance });
@@ -424,7 +447,7 @@
 
 		// Whatever the key does, pressing one is a sign of life — and a rating key has
 		// feedback to show on the overlay it would otherwise be hidden behind.
-		if (fullscreen) overlayEvent('wake');
+		wake();
 
 		switch (action.type) {
 			case 'rate':
@@ -533,7 +556,7 @@
 							onundo={() => overlayAction(undo)}
 							onexit={() => player?.exitFullscreen()}
 							ontoggle={() => overlayAction(toggleOverlay)}
-							onactivity={() => overlayEvent('wake')}
+							onactivity={wake}
 							onpointerin={() => overlayEvent('enter')}
 							onpointerout={() => overlayEvent('leave')}
 						/>
@@ -545,7 +568,7 @@
 							is away, and never on a touch screen — see the component.
 						-->
 						{#if !overlay.visible}
-							<PointerWake onwake={() => overlayEvent('wake')} />
+							<PointerWake onwake={wake} />
 						{/if}
 					{/if}
 				</Player>
