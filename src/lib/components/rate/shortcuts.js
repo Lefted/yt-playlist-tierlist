@@ -51,7 +51,7 @@ import { TIERS } from '$lib/tiers.js';
  * @typedef {{ type: 'rate', rating: Rating }
  *   | { type: 'seekBy', seconds: number }
  *   | { type: 'next' | 'previous' | 'replay' | 'playPause' | 'muteToggle'
- *       | 'fullscreen' | 'undo' | 'loop' | 'help' }} ShortcutAction
+ *       | 'fullscreen' | 'undo' | 'loop' | 'toggleOverlay' | 'help' }} ShortcutAction
  */
 
 /** How far `←`/`→` and `j`/`l` jump, as YouTube does it. */
@@ -376,7 +376,11 @@ const INTENTS = {
 	replay: { type: 'replay' },
 	undo: { type: 'undo' },
 	loop: { type: 'loop' },
-	fullscreen: { type: 'fullscreen' }
+	fullscreen: { type: 'fullscreen' },
+	// Meaningful only while the player is fullscreen — outside it there is no overlay
+	// to tuck away. The page is what knows that; the mapping stays unconditional, so
+	// the help list and the editor can still name the key (#19).
+	'toggle-overlay': { type: 'toggleOverlay' }
 };
 
 /**

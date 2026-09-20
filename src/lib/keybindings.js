@@ -298,7 +298,8 @@ export const BINDABLE_ACTIONS = [
 	{ id: /** @type {ActionId} */ ('replay'), label: 'Replay from the start' },
 	{ id: /** @type {ActionId} */ ('undo'), label: 'Undo the last rating' },
 	{ id: /** @type {ActionId} */ ('loop'), label: 'Loop the current video' },
-	{ id: /** @type {ActionId} */ ('fullscreen'), label: 'Fullscreen' }
+	{ id: /** @type {ActionId} */ ('fullscreen'), label: 'Fullscreen' },
+	{ id: /** @type {ActionId} */ ('toggle-overlay'), label: 'Hide/show fullscreen controls' }
 ];
 
 /**
@@ -312,6 +313,10 @@ export const BINDABLE_ACTIONS = [
  * Undo carries both `Ctrl+Z` and `Cmd+Z`, as the fixed mapping before it did:
  * whichever one a keyboard has is the one that hand reaches for, and losing undo
  * on macOS is not a default anybody would choose.
+ *
+ * The overlay toggle is `Shift+H` (#19): `h` is one of the few letters YouTube's
+ * player leaves alone, and the modifier keeps it out of the way of a plain letter a
+ * later tier or queue action might want.
  *
  * @type {Readonly<Keybindings>}
  */
@@ -328,7 +333,8 @@ export const DEFAULT_KEYBINDINGS = Object.freeze(
 		replay: Object.freeze(['r']),
 		undo: Object.freeze(['u', 'Backspace', 'Ctrl+z', 'Meta+z']),
 		loop: Object.freeze(['Shift+l']),
-		fullscreen: Object.freeze(['f'])
+		fullscreen: Object.freeze(['f']),
+		'toggle-overlay': Object.freeze(['Shift+h'])
 	})
 );
 

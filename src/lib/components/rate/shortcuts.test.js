@@ -166,6 +166,12 @@ describe('shortcutFor with the default bindings', () => {
 		expect(shortcutFor(keydown('l'))).toEqual({ type: 'seekBy', seconds: 10 });
 	});
 
+	it('maps Shift+H to the fullscreen overlay toggle, leaving plain h alone', () => {
+		expect(shortcutFor(keydown('H', { shiftKey: true }))).toEqual({ type: 'toggleOverlay' });
+		// `h` is nobody's: neither the player layer nor a default binding claims it.
+		expect(shortcutFor(keydown('h'))).toBeNull();
+	});
+
 	it('maps ? to the help list — Shift is how the character is typed', () => {
 		expect(shortcutFor(keydown('?', { shiftKey: true }))).toEqual({ type: 'help' });
 		expect(shortcutFor(keydown('?'))).toEqual({ type: 'help' });
@@ -266,6 +272,7 @@ describe('shortcutFor with the rating keys off', () => {
 		expect(shortcutFor(keydown('z', { ctrlKey: true }), off)).toBeNull();
 		expect(shortcutFor(keydown('F', { shiftKey: true }), off)).toBeNull();
 		expect(shortcutFor(keydown('L', { shiftKey: true }), off)).toBeNull();
+		expect(shortcutFor(keydown('H', { shiftKey: true }), off)).toBeNull();
 	});
 
 	it('silences a rebound key too — the switch is about the whole layer', () => {
@@ -379,6 +386,7 @@ describe('shortcutKeys', () => {
 		expect(keys.fullscreen).toEqual(['F']);
 		expect(keys.undo).toEqual(['U', '⌫', 'Ctrl+Z', 'Meta+Z']);
 		expect(keys.loop).toEqual(['Shift+L']);
+		expect(keys['toggle-overlay']).toEqual(['Shift+H']);
 	});
 
 	it('stops promising a player key a binding has taken', () => {
