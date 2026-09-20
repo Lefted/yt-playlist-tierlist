@@ -341,15 +341,25 @@ a rating — that action undoes the step its own toast is about, never a newer o
 The stack lives in memory and belongs to the active playlist.
 
 **Fullscreen** puts the app's own player wrapper on the screen, not the YouTube
-iframe — that is what keeps the keyboard on our side of the origin boundary. A
-compact overlay (tiers, previous/skip, undo, leave fullscreen) sits in the top
-left the whole time it is up — clear of the browser's "exit full screen" pill and
-of the embed's own volume, captions and settings buttons, which stay clickable.
-It does not fade out on its own: the eye button at its left edge (or `Shift`+`H`)
-shrinks it down to just that button and back, and which of the two it is on is
-remembered on the device, across videos and reloads. Using YouTube's own
-fullscreen button instead fullscreens the iframe, and then the shortcuts belong
-to YouTube again.
+iframe — that is what keeps the keyboard on our side of the origin boundary. It
+is also the only fullscreen on offer: the embed is created without a fullscreen
+button of its own (`fs: 0`), because YouTube's button fullscreens the iframe, and
+then the keyboard and the whole screen belong to YouTube and there is no way left
+to rate the video. The ways in are the Fullscreen button under the player, the
+`F` key and _fullscreen on play_. On a phone the app also asks to stay in
+landscape while it lasts, and gives the rotation back on the way out; devices
+that refuse simply keep rotating.
+
+A compact overlay (tiers, previous/skip, undo, leave fullscreen) sits in the top
+left — clear of the browser's "exit full screen" pill and of the embed's own
+volume, captions and settings buttons, which stay clickable. It comes and goes
+with YouTube's own controls: after about three seconds of nothing happening it
+fades out, and it is back on the next mouse movement over the video, the next tap,
+or the next shortcut. It never fades while the pointer is on it, and never while a
+video has ended unrated. The eye button at its left edge (or `Shift`+`H`) is the
+other, lasting way to get it out of the picture: it shrinks the box down to just
+that button and back, and which of the two it is on is remembered on the device,
+across videos and reloads.
 
 ## Install as an app (PWA)
 
@@ -529,14 +539,18 @@ place; the configuration lives in `components.json`.
   `replay`, `mute`, `unMute`, `isMuted`, `getCurrentTime`, `focus`,
   `requestFullscreen` and `exitFullscreen` via `bind:this` — the seek and mute
   calls are what the proxied player keys drive. Fullscreen goes to its own wrapper (`src/lib/fullscreen.js` hides
-  the prefixes and the refusals), and anything rendered into the component shows
-  up inside that wrapper — which is how `components/rate/PlayerOverlay.svelte`
-  gets on screen while fullscreen.
+  the prefixes, the refusals and the orientation lock), and anything rendered into
+  the component shows up inside that wrapper — which is how
+  `components/rate/PlayerOverlay.svelte` gets on screen while fullscreen. How the
+  embed itself is configured is `youtube/player-vars.js`, one decision per line.
 - The Rate page's rules are pure modules next to it:
   `components/rate/shortcuts.js` (the key mapping of both layers, the hints and the
   conflict notes, over `$lib/keybindings.js`; `components/rate/ShortcutsDialog.svelte`
   is the editor),
-  `components/rate/playback.js` (what the end of a video means, loop included)
+  `components/rate/playback.js` (what the end of a video means, loop included),
+  `components/rate/overlay-visibility.js` (when the fullscreen overlay is up: the
+  whole idle-hide rule minus the clock and minus the DOM, so the page only owns the
+  `setTimeout` and the signals that count as a sign of life)
   and `components/rate/undo.js` (how a reversible step reads).
 - Three tier controls, all driven by `src/lib/tiers.js`:
   `components/TierPicker.svelte` (compact, on a Browse card, with a clear button),
