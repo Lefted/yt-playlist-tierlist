@@ -267,12 +267,16 @@ DATABASE_URL=postgres://amv:…@localhost:55432/amv npm run user:set-password --
 They apply on `/rate` and stand down while a dialog or popover is open or the
 focus is in a text field.
 
-Two sets of keys meet on that page. YouTube's own player answers `k`, `m`, the
-arrows and `j`/`l` — but only while the iframe has the focus, and the Rate page
-deliberately keeps the focus on its own side so that the rating keys work in
-fullscreen. Those player keys are therefore **proxied by the app**, and they stay
-even when the rating keys are switched off, so that no key means two different
-things depending on a focus you cannot see.
+Two sets of keys meet on that page. YouTube's own player would answer `k`, `m`,
+the arrows and `j`/`l` — but only while the iframe has the focus, and a key that
+means one thing or another depending on a focus you cannot see is a trap. The
+embed is therefore created without a keyboard of its own (`disablekb: 1`), and the
+app **proxies** every one of those keys through the IFrame API instead. They work
+even when the rating keys are switched off, and they no longer depend on where the
+focus is: a click or tap on the video hands the keyboard back to the page a quarter
+of a second later.
+
+The arrows belong to the player on this page, so they do not scroll it.
 
 ### Player
 
@@ -280,6 +284,7 @@ things depending on a focus you cannot see.
 | -------------- | ------------------- |
 | `K` or `Space` | Play / pause        |
 | `M`            | Mute / unmute       |
+| `↑` / `↓`      | Volume ±5 %         |
 | `←` / `→`      | Back / forward 5 s  |
 | `J` / `L`      | Back / forward 10 s |
 
@@ -315,7 +320,8 @@ bind a tier to `K` and `K` rates, leaving play/pause on `Space`. `?` is the
 exception — it always opens the shortcut list, because that list is how you find
 out what everything else is bound to, so it cannot be rebound. The player layer
 itself (`K`, `Space`, `M`, `J`, `L`, the arrows) is not rebindable; it mirrors
-YouTube, and shadowing it is enough.
+YouTube, and shadowing it is enough — though a shadowed player key is one the
+embed no longer answers either, so it is gone rather than moved.
 
 **Editing.** One row per action, each with its keys as removable chips and an
 _Add key_ button that records the next keystroke (`Esc` cancels). A key can belong
@@ -343,20 +349,30 @@ The stack lives in memory and belongs to the active playlist.
 **Fullscreen** puts the app's own player wrapper on the screen, not the YouTube
 iframe — that is what keeps the keyboard on our side of the origin boundary. It
 is also the only fullscreen on offer: the embed is created without a fullscreen
-button of its own (`fs: 0`), because YouTube's button fullscreens the iframe, and
-then the keyboard and the whole screen belong to YouTube and there is no way left
-to rate the video. The ways in are the Fullscreen button under the player, the
-`F` key and _fullscreen on play_. On a phone the app also asks to stay in
-landscape while it lasts, and gives the rotation back on the way out; devices
-that refuse simply keep rotating.
+button of its own (`fs: 0`) and without a keyboard (`disablekb: 1`), because
+YouTube's button and YouTube's `f` fullscreen the iframe, and then the keyboard
+and the whole screen belong to YouTube and there is no way left to rate the video.
+Should the embed get into fullscreen by some path anyway, the app leaves it again
+at once and says where the fullscreen it has is. The ways in are the Fullscreen
+button under the player, the `F` key and _fullscreen on play_. On a phone the app
+also asks to stay in landscape while it lasts, and gives the rotation back on the
+way out; devices that refuse simply keep rotating.
 
 A compact overlay (tiers, previous/skip, undo, leave fullscreen) sits in the top
 left — clear of the browser's "exit full screen" pill and of the embed's own
 volume, captions and settings buttons, which stay clickable. It comes and goes
 with YouTube's own controls: after about three seconds of nothing happening it
-fades out, and it is back on the next mouse movement over the video, the next tap,
-or the next shortcut. It never fades while the pointer is on it, and never while a
-video has ended unrated. The eye button at its left edge (or `Shift`+`H`) is the
+fades out, and it is back on the next mouse movement over the video or the next
+shortcut. It never fades while the pointer is on it, and never while a
+video has ended unrated.
+
+**On a touch screen a tap on the video toggles it**, exactly as a tap hides
+YouTube's own controls when they are showing: tap to put it away, tap again to
+bring it back, and the three-second fade still runs in between. Taps on the
+overlay itself are not taps on the video, so its own buttons never hide it. On a
+mouse setup the same click stays play/pause and only wakes the overlay.
+
+The eye button at its left edge (or `Shift`+`H`) is the
 other, lasting way to get it out of the picture: it shrinks the box down to just
 that button and back, and which of the two it is on is remembered on the device,
 across videos and reloads.
@@ -536,9 +552,11 @@ place; the configuration lives in `components.json`.
   and `?unrated=0` mirror the queue filter and stay in sync with the toolbar.
 - `src/lib/components/Player.svelte` wraps the YouTube IFrame Player API: it takes
   a `videoId` plus callbacks and exposes `play`, `pause`, `seekTo`, `seekBy`,
-  `replay`, `mute`, `unMute`, `isMuted`, `getCurrentTime`, `focus`,
-  `requestFullscreen` and `exitFullscreen` via `bind:this` — the seek and mute
-  calls are what the proxied player keys drive. Fullscreen goes to its own wrapper (`src/lib/fullscreen.js` hides
+  `replay`, `mute`, `unMute`, `isMuted`, `changeVolume`, `getCurrentTime`, `focus`,
+  `iframe`, `requestFullscreen` and `exitFullscreen` via `bind:this` — the seek,
+  mute and volume calls are what the proxied player keys drive, and `iframe` is
+  there for the one question only the page can ask: whether the focus has just
+  moved into the embed. Fullscreen goes to its own wrapper (`src/lib/fullscreen.js` hides
   the prefixes, the refusals and the orientation lock), and anything rendered into
   the component shows up inside that wrapper — which is how
   `components/rate/PlayerOverlay.svelte` gets on screen while fullscreen. How the
@@ -550,7 +568,10 @@ place; the configuration lives in `components.json`.
   `components/rate/playback.js` (what the end of a video means, loop included),
   `components/rate/overlay-visibility.js` (when the fullscreen overlay is up: the
   whole idle-hide rule minus the clock and minus the DOM, so the page only owns the
-  `setTimeout` and the signals that count as a sign of life)
+  `setTimeout` and the signals that count as a sign of life),
+  `components/rate/window-blur.js` (what a `window` blur is worth — the only trace a
+  tap on the cross-origin video ever leaves: a toggle on touch, a wake on a mouse,
+  and the keyboard back out of the iframe either way)
   and `components/rate/undo.js` (how a reversible step reads).
 - Three tier controls, all driven by `src/lib/tiers.js`:
   `components/TierPicker.svelte` (compact, on a Browse card, with a clear button),
