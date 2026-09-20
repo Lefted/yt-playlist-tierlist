@@ -52,8 +52,7 @@
  * is bound to.
  *
  * @typedef {'rateS'|'rateA'|'rateB'|'rateC'|'rateD'|'rateF'
- *   |'next'|'previous'|'replay'|'undo'|'loop'|'fullscreen'
- *   |'toggle-overlay'} ActionId
+ *   |'next'|'previous'|'replay'|'undo'|'loop'|'fullscreen'|'toggleOverlay'} ActionId
  */
 
 /**

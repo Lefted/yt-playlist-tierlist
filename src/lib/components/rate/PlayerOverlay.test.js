@@ -25,7 +25,8 @@ import PlayerOverlay from './PlayerOverlay.svelte';
 const CONTROLS = ['S tier', 'F tier', 'Previous', 'Skip', 'Undo', 'Leave fullscreen'];
 
 /**
- * @param {{ collapsed?: boolean, title?: string }} [props] - Everything else is a stub.
+ * @param {{ collapsed?: boolean, title?: string, awaitingRating?: boolean,
+ *   shortcuts?: boolean }} [props] - Everything else is a stub.
  * @returns {string} The overlay's server-rendered HTML.
  */
 function html(props = {}) {
@@ -108,7 +109,8 @@ function reachable(markup) {
 			continue;
 		}
 
-		if (hiddenFrom === null && tag.includes('inert')) {
+		// The attribute, not the six letters: a class name could carry them too.
+		if (hiddenFrom === null && /\binert(=|\s|>)/.test(tag)) {
 			hiddenFrom = start;
 			hiddenDepth = depth;
 		}
@@ -142,8 +144,21 @@ describe('PlayerOverlay', () => {
 
 		expect(markup).toContain('aria-expanded="true"');
 		// Nothing is tucked away, so nothing is hidden from the keyboard either.
-		expect(markup).not.toContain('inert');
+		expect(markup).not.toMatch(/\binert(=|\s|>)/);
 		expect(reachable(markup)).toBe(markup);
+	});
+
+	it('names the key that works the eye, so the shortcut is findable in fullscreen', () => {
+		// The overlay matches no keys itself; it only has to promise the one the Rate
+		// page answers, which is why it is generated from the live bindings.
+		const markup = html({ title: 'Some video' });
+		expect(markup).toContain('aria-keyshortcuts="Shift+H"');
+		expect(markup).toContain('title="Hide controls (Shift+H)"');
+
+		// …and promises nothing once the rating keys are switched off.
+		const off = html({ title: 'Some video', shortcuts: false });
+		expect(off).not.toContain('aria-keyshortcuts');
+		expect(off).toContain('title="Hide controls"');
 	});
 
 	it('puts the title and every control out of reach once collapsed', () => {
@@ -170,6 +185,24 @@ describe('PlayerOverlay', () => {
 		}
 	});
 
+	it('still says the video ended while it is collapsed', () => {
+		// The visible "Finished" note is folded away with everything else, so the eye
+		// carries the cue instead — and a live region outside the fold says it in words.
+		const markup = html({ collapsed: true, awaitingRating: true, title: 'Some video' });
+		const open = reachable(markup);
+
+		expect(open).toContain('animate-pulse');
+		expect(open).toContain('role="status"');
+		expect(open).toContain('Finished');
+		// `sr-only` is out of flow, so the box is still the size of the button.
+		expect(open).toContain('sr-only');
+
+		// Expanded there is exactly one of those notes, and it is the visible one.
+		const up = html({ awaitingRating: true, title: 'Some video' });
+		expect(up).not.toContain('sr-only');
+		expect(up.match(/role="status"/g)).toHaveLength(1);
+	});
+
 	it('collapses by changing size, not by fading out', () => {
 		// The point of #19: the box itself shrinks to the eye button, so the backdrop
 		// goes with it. A `1fr → 0fr` grid track on both axes is how, and it is worth
@@ -179,6 +212,11 @@ describe('PlayerOverlay', () => {
 		expect(markup).toContain('grid-template-rows: 0fr');
 		expect(markup).toContain('grid-template-columns: 0fr');
 		expect(html({ title: 'Some video' })).toContain('grid-template-rows: 1fr');
+
+		// The container's own padding goes with them: collapsed, the box has to be the
+		// eye button and nothing more.
+		expect(markup).toContain('p-0');
+		expect(html({ title: 'Some video' })).not.toContain('p-0');
 
 		// …and it holds still for anyone who asked for no motion.
 		expect(markup).toContain('motion-reduce:transition-none');

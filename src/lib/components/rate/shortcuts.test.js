@@ -386,7 +386,7 @@ describe('shortcutKeys', () => {
 		expect(keys.fullscreen).toEqual(['F']);
 		expect(keys.undo).toEqual(['U', '⌫', 'Ctrl+Z', 'Meta+Z']);
 		expect(keys.loop).toEqual(['Shift+L']);
-		expect(keys['toggle-overlay']).toEqual(['Shift+H']);
+		expect(keys.toggleOverlay).toEqual(['Shift+H']);
 	});
 
 	it('stops promising a player key a binding has taken', () => {

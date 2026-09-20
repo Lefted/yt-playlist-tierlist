@@ -432,6 +432,8 @@
 							rating={current.rating}
 							title={current.title}
 							collapsed={settings.overlayCollapsed}
+							shortcuts={settings.shortcuts}
+							keybindings={settings.keybindings}
 							{awaitingRating}
 							canPrevious={session.hasPrevious}
 							canNext={session.hasNext}

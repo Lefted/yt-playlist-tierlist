@@ -27,7 +27,7 @@
 	 * to the cross-origin iframe and never reaches us. Whether the controls are up is
 	 * therefore the user's decision, taken with the eye button and remembered in
 	 * `settings.overlayCollapsed`. Collapsed, the box shrinks to exactly that button —
-	 * still in the same corner, still inside the right-hand budget above.
+	 * same corner, same backdrop, so the eye *is* the overlay until it is pressed again.
 	 */
 	import Eye from '@lucide/svelte/icons/eye';
 	import EyeOff from '@lucide/svelte/icons/eye-off';
@@ -36,6 +36,7 @@
 	import SkipForward from '@lucide/svelte/icons/skip-forward';
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 
+	import { DEFAULT_KEYBINDINGS, ariaKeyshortcuts, chordLabel, chordsOf } from '$lib/keybindings.js';
 	import { TIERS, TIER_BUTTON_BASE } from '$lib/tiers.js';
 	import { cn } from '$lib/utils.js';
 
@@ -50,6 +51,11 @@
 	 * @property {boolean} [canUndo]
 	 * @property {string} [undoLabel]
 	 * @property {string} [title] - The video being rated.
+	 * @property {import('$lib/types.js').Keybindings} [keybindings] - `settings.keybindings`,
+	 *   for the eye's key hint. The overlay matches no keys itself — the Rate page owns
+	 *   the keyboard — it only has to say which one does what it does.
+	 * @property {boolean} [shortcuts] - Whether the rating keys are on; with them off
+	 *   the hint goes, because there is nothing to press.
 	 * @property {() => void} onprevious
 	 * @property {() => void} onnext
 	 * @property {() => void} onundo
@@ -68,6 +74,8 @@
 		canUndo = false,
 		undoLabel = 'Undo',
 		title = '',
+		keybindings = DEFAULT_KEYBINDINGS,
+		shortcuts = true,
 		onprevious,
 		onnext,
 		onundo,
@@ -89,32 +97,122 @@
 		{ id: 'exit', label: 'Leave fullscreen', icon: Minimize, onclick: onexit }
 	]);
 
-	/**
-	 * The size animation, as the CSS grid `1fr → 0fr` trick.
-	 *
-	 * A single-track grid whose track is animated between `1fr` and `0fr`, with the
-	 * item clipped inside it: the *box* really changes size, so the backdrop shrinks
-	 * with the content instead of the content merely fading out inside a box that
-	 * stays. Both axes, because the overlay has to lose its width as well as its
-	 * height to end up as one button. `interpolate-size` would be shorter but is not
-	 * everywhere yet, and a measured height would need a `ResizeObserver` for
-	 * something the layout engine already knows.
-	 *
-	 * The gaps live *inside* the collapsing region (`pb-2`, `pl-1.5`) rather than on
-	 * the flex parents: a gap next to a zero-sized track is still a gap, and it would
-	 * leave the collapsed box a few pixels bigger than the button it is supposed to be.
-	 */
-	const REGION =
-		'grid transition-[grid-template-rows,grid-template-columns] duration-200 ease-out ' +
-		'motion-reduce:transition-none';
+	/** The look every icon button here shares; the sizes differ, the surface does not. */
+	const ICON_BUTTON = 'bg-white/15 text-white hover:bg-white/25';
 
-	/** The clipped grid item. `min-*-0` is what lets it shrink past its content. */
-	const REGION_INNER =
-		'min-h-0 min-w-0 overflow-hidden transition-opacity duration-200 motion-reduce:transition-none';
+	const uid = $props.id();
+	const titleRegion = `${uid}-title`;
+	const controlsRegion = `${uid}-controls`;
 
-	const Toggle = $derived(collapsed ? EyeOff : Eye);
+	// A tier can carry several keys but the tooltip has room for one, as on the tier
+	// bar: the first is the hint and the help list has the rest.
+	const toggleChords = $derived(shortcuts ? chordsOf(keybindings, 'toggleOverlay') : []);
+	const toggleKey = $derived(toggleChords[0] ? chordLabel(toggleChords[0]) : '');
 	const toggleLabel = $derived(collapsed ? 'Show controls' : 'Hide controls');
+	const Toggle = $derived(collapsed ? EyeOff : Eye);
 </script>
+
+<!--
+	The size animation, as the CSS grid `1fr → 0fr` trick.
+
+	A single-track grid whose track is animated between `1fr` and `0fr`, with the item
+	clipped inside it: the *box* really changes size, so the backdrop shrinks with the
+	content instead of the content merely fading out inside a box that stays. Both
+	axes, because the overlay has to lose its width as well as its height to end up as
+	one button. `interpolate-size` would be shorter but is not everywhere yet, and a
+	measured height would need a `ResizeObserver` for something the layout engine
+	already knows.
+
+	`min-*-0` plus `overflow-hidden` is what lets the item shrink past its content —
+	and the clipping is why the content carries a little padding of its own: a
+	selected tier's `ring-offset-2` reaches 4 px beyond the button, and the edge of
+	the region would otherwise cut it off.
+-->
+{#snippet region(id, content)}
+	<div
+		{id}
+		class="grid transition-[grid-template-rows,grid-template-columns] duration-200 ease-out motion-reduce:transition-none"
+		style:grid-template-rows={collapsed ? '0fr' : '1fr'}
+		style:grid-template-columns={collapsed ? '0fr' : '1fr'}
+	>
+		<div
+			class={cn(
+				'min-h-0 min-w-0 overflow-hidden transition-opacity duration-200 motion-reduce:transition-none',
+				collapsed && 'opacity-0'
+			)}
+			inert={collapsed}
+			aria-hidden={collapsed}
+		>
+			{@render content()}
+		</div>
+	</div>
+{/snippet}
+
+{#snippet videoTitle()}
+	<!--
+		Capped, not `max-w-full`: inside a `w-fit` box a long title would set the
+		width, and the box would be back to covering most of the picture.
+	-->
+	<p class="line-clamp-1 max-w-[20rem] pb-2 text-sm font-medium text-white/90">
+		{title}
+	</p>
+{/snippet}
+
+{#snippet controls()}
+	<!--
+		The gaps live *inside* the collapsing region (`pb-2` above, `pl-2.5` here)
+		rather than on the flex parents: a gap next to a zero-sized track is still a
+		gap, and it would leave the collapsed box bigger than the button it is meant to
+		be. Of that `pl-2.5`, 6 px is the gap to the eye and 4 px is the ring room.
+	-->
+	<div class="flex flex-col items-start gap-2 p-1 pl-2.5">
+		<div class="flex flex-wrap items-center gap-1.5">
+			{#each TIERS as tier (tier.rating)}
+				<button
+					type="button"
+					aria-pressed={rating === tier.rating}
+					aria-label={tier.label}
+					title={tier.label}
+					onclick={() => onrate(tier.rating)}
+					class={cn(
+						TIER_BUTTON_BASE,
+						'h-10 w-11 rounded-md text-lg leading-none sm:h-11 sm:w-14',
+						tier.solid,
+						rating === tier.rating && cn('ring-2 ring-offset-2 ring-offset-black', tier.ring),
+						awaitingRating && 'animate-pulse motion-reduce:animate-none'
+					)}
+				>
+					{tier.rating}
+				</button>
+			{/each}
+
+			<span class="mx-1 h-8 w-px bg-white/25" aria-hidden="true"></span>
+
+			{#each buttons as button (button.id)}
+				{@const Icon = button.icon}
+				<button
+					type="button"
+					aria-label={button.label}
+					title={button.label}
+					disabled={button.disabled}
+					onclick={button.onclick}
+					class={cn(
+						TIER_BUTTON_BASE,
+						ICON_BUTTON,
+						'h-10 w-11 rounded-md sm:h-11 sm:w-12',
+						'disabled:pointer-events-none disabled:opacity-40'
+					)}
+				>
+					<Icon class="size-5" aria-hidden="true" />
+				</button>
+			{/each}
+		</div>
+
+		{#if awaitingRating}
+			<p class="text-xs text-white/80" role="status">Finished — pick a tier.</p>
+		{/if}
+	</div>
+{/snippet}
 
 <!--
 	The box is the only thing this component paints, so a click anywhere else on the
@@ -127,30 +225,20 @@
 	is the top offset, which already clears the embed's chrome. `w-fit` and the
 	wrapping button row are what keep a phone in landscape working: the box is only as
 	wide as its content, which folds into a second row rather than growing.
+
+	Its padding goes with the content: collapsed, the box has to be the 44 px button
+	and nothing more, so the padding animates away alongside the two regions.
 -->
 <div
-	class="absolute top-24 left-3 z-10 flex w-fit max-w-[calc(100%-1.5rem)] flex-col items-start rounded-xl bg-black/60 p-2 backdrop-blur sm:max-w-[calc(100%-15rem)] sm:p-3"
+	class={cn(
+		'absolute top-24 left-3 z-10 flex w-fit max-w-[calc(100%-1.5rem)] flex-col items-start',
+		'rounded-xl bg-black/60 backdrop-blur',
+		'transition-[padding] duration-200 ease-out motion-reduce:transition-none',
+		collapsed ? 'p-0' : 'p-2 sm:p-3'
+	)}
 >
 	{#if title}
-		<div
-			class={REGION}
-			style:grid-template-rows={collapsed ? '0fr' : '1fr'}
-			style:grid-template-columns={collapsed ? '0fr' : '1fr'}
-		>
-			<div
-				class={cn(REGION_INNER, collapsed && 'opacity-0')}
-				inert={collapsed}
-				aria-hidden={collapsed}
-			>
-				<!--
-					Capped, not `max-w-full`: inside a `w-fit` box a long title would set the
-					width, and the box would be back to covering most of the picture.
-				-->
-				<p class="line-clamp-1 max-w-[20rem] pb-2 text-sm font-medium text-white/90">
-					{title}
-				</p>
-			</div>
-		</div>
+		{@render region(titleRegion, videoTitle)}
 	{/if}
 
 	<!--
@@ -159,83 +247,47 @@
 		read as the box shrinking *into* the button — and it keeps the tap target under
 		the finger that just pressed it.
 	-->
-	<div class="flex max-w-full items-start">
+	<div class="flex max-w-full items-center">
 		<button
 			type="button"
 			aria-expanded={!collapsed}
+			aria-controls={title ? `${titleRegion} ${controlsRegion}` : controlsRegion}
+			aria-keyshortcuts={ariaKeyshortcuts(toggleChords)}
 			aria-label={toggleLabel}
-			title={toggleLabel}
+			title={toggleKey ? `${toggleLabel} (${toggleKey})` : toggleLabel}
 			onclick={ontoggle}
 			class={cn(
 				TIER_BUTTON_BASE,
+				ICON_BUTTON,
 				// 44 px square at every width, unlike the buttons beside it: this is the
 				// one control a phone has to be able to hit while everything else is away.
-				'h-11 w-11 shrink-0 rounded-md bg-white/15 text-white hover:bg-white/25'
+				'h-11 w-11 shrink-0',
+				// Collapsed the button *is* the box, so it takes the box's own corners.
+				collapsed ? 'rounded-xl' : 'rounded-md',
+				// The video ended unrated and the tier buttons that would say so are folded
+				// away; the eye is all that is left to draw the eye.
+				awaitingRating && collapsed && 'animate-pulse motion-reduce:animate-none'
 			)}
 		>
 			<Toggle
-				class={cn('size-5 transition-opacity duration-200', collapsed && 'opacity-50')}
+				class={cn(
+					'size-5 transition-opacity duration-200 motion-reduce:transition-none',
+					collapsed && 'opacity-50'
+				)}
 				aria-hidden="true"
 			/>
 		</button>
 
-		<div
-			class={REGION}
-			style:grid-template-rows={collapsed ? '0fr' : '1fr'}
-			style:grid-template-columns={collapsed ? '0fr' : '1fr'}
-		>
-			<div
-				class={cn(REGION_INNER, collapsed && 'opacity-0')}
-				inert={collapsed}
-				aria-hidden={collapsed}
-			>
-				<div class="flex flex-col items-start gap-2 pl-1.5">
-					<div class="flex flex-wrap items-center gap-1.5">
-						{#each TIERS as tier (tier.rating)}
-							<button
-								type="button"
-								aria-pressed={rating === tier.rating}
-								aria-label={tier.label}
-								title={tier.label}
-								onclick={() => onrate(tier.rating)}
-								class={cn(
-									TIER_BUTTON_BASE,
-									'h-10 w-11 rounded-md text-lg leading-none sm:h-11 sm:w-14',
-									tier.solid,
-									rating === tier.rating && cn('ring-2 ring-offset-2 ring-offset-black', tier.ring),
-									awaitingRating && 'animate-pulse'
-								)}
-							>
-								{tier.rating}
-							</button>
-						{/each}
-
-						<span class="mx-1 h-8 w-px bg-white/25" aria-hidden="true"></span>
-
-						{#each buttons as button (button.id)}
-							{@const Icon = button.icon}
-							<button
-								type="button"
-								aria-label={button.label}
-								title={button.label}
-								disabled={button.disabled}
-								onclick={button.onclick}
-								class={cn(
-									TIER_BUTTON_BASE,
-									'h-10 w-11 rounded-md bg-white/15 text-white hover:bg-white/25 sm:h-11 sm:w-12',
-									'disabled:pointer-events-none disabled:opacity-40'
-								)}
-							>
-								<Icon class="size-5" aria-hidden="true" />
-							</button>
-						{/each}
-					</div>
-
-					{#if awaitingRating}
-						<p class="text-xs text-white/80" role="status">Finished — pick a tier.</p>
-					{/if}
-				</div>
-			</div>
-		</div>
+		{@render region(controlsRegion, controls)}
 	</div>
+
+	{#if awaitingRating && collapsed}
+		<!--
+			The visible "Finished" note is inside the collapsed region, where a screen
+			reader will not follow. This is the same message where the live region can
+			still reach it, and it costs no layout: `sr-only` takes the text out of flow,
+			so the collapsed box stays the size of the button.
+		-->
+		<p class="sr-only" role="status">Finished — pick a tier.</p>
+	{/if}
 </div>

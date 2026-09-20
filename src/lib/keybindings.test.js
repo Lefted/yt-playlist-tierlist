@@ -123,7 +123,7 @@ describe('the default bindings', () => {
 	});
 
 	it('puts the fullscreen overlay toggle of #19 on Shift+H', () => {
-		expect(DEFAULT_KEYBINDINGS['toggle-overlay']).toEqual(['Shift+h']);
+		expect(DEFAULT_KEYBINDINGS.toggleOverlay).toEqual(['Shift+h']);
 	});
 
 	it('binds every bindable action and nothing else', () => {
@@ -290,7 +290,7 @@ describe('the closed action list', () => {
 			'undo',
 			'loop',
 			'fullscreen',
-			'toggle-overlay'
+			'toggleOverlay'
 		]);
 	});
 

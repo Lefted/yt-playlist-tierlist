@@ -299,7 +299,7 @@ export const BINDABLE_ACTIONS = [
 	{ id: /** @type {ActionId} */ ('undo'), label: 'Undo the last rating' },
 	{ id: /** @type {ActionId} */ ('loop'), label: 'Loop the current video' },
 	{ id: /** @type {ActionId} */ ('fullscreen'), label: 'Fullscreen' },
-	{ id: /** @type {ActionId} */ ('toggle-overlay'), label: 'Hide/show fullscreen controls' }
+	{ id: /** @type {ActionId} */ ('toggleOverlay'), label: 'Hide/show fullscreen controls' }
 ];
 
 /**
@@ -334,7 +334,7 @@ export const DEFAULT_KEYBINDINGS = Object.freeze(
 		undo: Object.freeze(['u', 'Backspace', 'Ctrl+z', 'Meta+z']),
 		loop: Object.freeze(['Shift+l']),
 		fullscreen: Object.freeze(['f']),
-		'toggle-overlay': Object.freeze(['Shift+h'])
+		toggleOverlay: Object.freeze(['Shift+h'])
 	})
 );
 

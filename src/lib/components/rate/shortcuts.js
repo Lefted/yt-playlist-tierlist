@@ -380,7 +380,7 @@ const INTENTS = {
 	// Meaningful only while the player is fullscreen — outside it there is no overlay
 	// to tuck away. The page is what knows that; the mapping stays unconditional, so
 	// the help list and the editor can still name the key (#19).
-	'toggle-overlay': { type: 'toggleOverlay' }
+	toggleOverlay: { type: 'toggleOverlay' }
 };
 
 /**
