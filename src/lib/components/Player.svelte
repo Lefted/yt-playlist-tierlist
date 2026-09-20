@@ -12,9 +12,12 @@
 		enterFullscreen,
 		FULLSCREEN_EVENTS,
 		isFullscreenElement,
-		leaveFullscreen
+		leaveFullscreen,
+		lockLandscape,
+		unlockOrientation
 	} from '$lib/fullscreen.js';
 	import { errorReasonFor, loadIframeApi, PLAYER_STATE } from '$lib/youtube/iframe-api.js';
+	import { playerVarsFor } from '$lib/youtube/player-vars.js';
 	import { cn } from '$lib/utils.js';
 
 	/** @typedef {import('$lib/youtube/iframe-api.js').YouTubePlayer} YouTubePlayer */
@@ -112,14 +115,9 @@
 				const initialId = videoId;
 				created = new YT.Player(target, {
 					videoId: initialId ?? undefined,
-					playerVars: {
-						playsinline: 1, // iOS plays inline instead of taking over the screen
-						rel: 0,
-						modestbranding: 1,
-						enablejsapi: 1,
-						autoplay: autoplay ? 1 : 0,
-						origin: location.origin
-					},
+					// Every parameter and its reason live in `youtube/player-vars.js`; `fs: 0`
+					// is the load-bearing one — see {@link requestFullscreen}.
+					playerVars: playerVarsFor({ autoplay, origin: location.origin }),
 					events: {
 						onReady: () => {
 							if (cancelled) return;
@@ -155,16 +153,26 @@
 	 * Keep {@link fullscreen} in step with the browser, whoever changed it — our own
 	 * button, `Escape`, or the window manager.
 	 *
-	 * Only *our* wrapper counts. When the user takes YouTube's own fullscreen button
-	 * instead, the fullscreen element is the cross-origin iframe: the overlay would
-	 * not be on screen and the keys would not reach us, so that is not our fullscreen.
+	 * Only *our* wrapper counts. The embed has no fullscreen button of its own any
+	 * more (`fs: 0`), but a gesture we did not anticipate could still put the
+	 * cross-origin iframe in fullscreen: the overlay would not be on screen and the
+	 * keys would not reach us, so that is not our fullscreen.
+	 *
+	 * Leaving is also where the orientation lock is given back — whoever ended it,
+	 * our button or `Escape`.
 	 */
 	$effect(() => {
 		const node = surface;
 		if (!node) return;
 
+		/** @type {boolean} What the last sync saw; `unlock` is only for the way out. */
+		let was = false;
+
 		const sync = () => {
-			fullscreen = isFullscreenElement(document, node);
+			const now = isFullscreenElement(document, node);
+			if (was && !now) unlockOrientation(window.screen);
+			was = now;
+			fullscreen = now;
 		};
 
 		sync();
@@ -303,7 +311,12 @@
 	 * Fullscreening the iframe would make a cross-origin document the fullscreen
 	 * element, and every key would go to YouTube instead of to us (issue #9). The
 	 * wrapper is ours, so the overlay stays on screen and the shortcuts keep working;
-	 * focus is pulled back out of the iframe right away.
+	 * focus is pulled back out of the iframe right away. This is the *only* way into
+	 * fullscreen from here: the embed is created with `fs: 0`, which takes YouTube's
+	 * own button and its double-tap away (issue #20).
+	 *
+	 * A phone is asked to stay in landscape while it lasts — not awaited, because the
+	 * answer changes nothing: a device that refuses simply keeps rotating.
 	 *
 	 * Awaits the browser's answer instead of only the call, because a refusal
 	 * usually arrives as a rejected promise: iOS Safari allows fullscreen on a
@@ -315,6 +328,7 @@
 	 */
 	export async function requestFullscreen() {
 		if (!(await enterFullscreen(surface))) return false;
+		void lockLandscape(window.screen);
 		focus();
 		return true;
 	}

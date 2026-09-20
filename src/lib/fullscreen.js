@@ -76,3 +76,55 @@ export async function leaveFullscreen(doc) {
 		return false;
 	}
 }
+
+/**
+ * Ask the device to stay in landscape while our fullscreen is up.
+ *
+ * A phone that goes fullscreen in portrait shows a letterboxed strip with room
+ * for neither the video nor the overlay, and the user's rotation lock is exactly
+ * the setting that stops them fixing it by turning the phone. The Screen
+ * Orientation API is the way to ask, and it is deliberately a *request*: Android
+ * grants it while an element of ours is fullscreen, desktop browsers reject it
+ * ("not available on this device") and iOS Safari has no `lock` at all. All three
+ * answers are fine — hence the boolean rather than a throw, and hence no caller
+ * has to know which kind of device it is on.
+ *
+ * Call it *after* the fullscreen request resolved: Android refuses a lock that
+ * does not come with a fullscreen element.
+ *
+ * @param {any} screen - Usually `window.screen`.
+ * @returns {Promise<boolean>} Whether the device is now held in landscape.
+ */
+export async function lockLandscape(screen) {
+	const orientation = screen?.orientation;
+	if (typeof orientation?.lock !== 'function') return false;
+
+	try {
+		await orientation.lock('landscape');
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Give the rotation back to the device.
+ *
+ * Leaving fullscreen drops the lock by itself in the browsers that have one, but
+ * only for the fullscreen element that held it; saying so explicitly costs one
+ * guarded call and keeps a phone from staying sideways on a page with no video.
+ *
+ * @param {any} screen - Usually `window.screen`.
+ * @returns {boolean} Whether there was a lock API to call.
+ */
+export function unlockOrientation(screen) {
+	const orientation = screen?.orientation;
+	if (typeof orientation?.unlock !== 'function') return false;
+
+	try {
+		orientation.unlock();
+		return true;
+	} catch {
+		return false;
+	}
+}

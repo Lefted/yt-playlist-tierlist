@@ -4,7 +4,9 @@ import {
 	FULLSCREEN_EVENTS,
 	fullscreenElementOf,
 	isFullscreenElement,
-	leaveFullscreen
+	leaveFullscreen,
+	lockLandscape,
+	unlockOrientation
 } from './fullscreen.js';
 
 describe('fullscreenElementOf', () => {
@@ -90,5 +92,58 @@ describe('leaveFullscreen', () => {
 describe('FULLSCREEN_EVENTS', () => {
 	it('covers both spellings', () => {
 		expect(FULLSCREEN_EVENTS).toEqual(['fullscreenchange', 'webkitfullscreenchange']);
+	});
+});
+
+describe('lockLandscape', () => {
+	it('asks the device for landscape', async () => {
+		const lock = vi.fn().mockResolvedValue(undefined);
+		const screen = { orientation: { lock } };
+
+		expect(await lockLandscape(screen)).toBe(true);
+		expect(lock).toHaveBeenCalledWith('landscape');
+		expect(lock.mock.instances[0]).toBe(screen.orientation);
+	});
+
+	it('takes a refusal for an answer (every desktop browser)', async () => {
+		const orientation = { lock: () => Promise.reject(new Error('not available on this device')) };
+		expect(await lockLandscape({ orientation })).toBe(false);
+	});
+
+	it('survives a browser without the API (iOS Safari)', async () => {
+		expect(await lockLandscape({ orientation: {} })).toBe(false);
+		expect(await lockLandscape({})).toBe(false);
+		expect(await lockLandscape(null)).toBe(false);
+	});
+
+	it('swallows a synchronous throw', async () => {
+		const orientation = {
+			lock: () => {
+				throw new TypeError('not a function here either');
+			}
+		};
+		expect(await lockLandscape({ orientation })).toBe(false);
+	});
+});
+
+describe('unlockOrientation', () => {
+	it('gives the rotation back', () => {
+		const unlock = vi.fn();
+		expect(unlockOrientation({ orientation: { unlock } })).toBe(true);
+		expect(unlock).toHaveBeenCalledOnce();
+	});
+
+	it('is a no-op without the API, and never throws', () => {
+		expect(unlockOrientation({ orientation: {} })).toBe(false);
+		expect(unlockOrientation(null)).toBe(false);
+		expect(
+			unlockOrientation({
+				orientation: {
+					unlock: () => {
+						throw new Error('nope');
+					}
+				}
+			})
+		).toBe(false);
 	});
 });
