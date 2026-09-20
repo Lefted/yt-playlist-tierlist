@@ -9,6 +9,14 @@ describe('playerVarsFor', () => {
 		expect(playerVarsFor().fs).toBe(0);
 	});
 
+	it('leaves the embed without a keyboard of its own', () => {
+		// The other half of the same bargain: with the focus in the iframe, `f` would be
+		// YouTube's fullscreen and no key would reach our handler at all. Everything the
+		// embed answered — play/pause, mute, the seeks, the volume — is proxied by
+		// `components/rate/shortcuts.js` instead (issue #23).
+		expect(playerVarsFor().disablekb).toBe(1);
+	});
+
 	it('keeps playback inline on iOS and the API talking to this origin', () => {
 		const vars = playerVarsFor({ origin: 'https://example.test' });
 
