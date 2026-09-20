@@ -441,6 +441,24 @@
 		toast.info('This browser will not put the player into fullscreen.');
 	}
 
+	/**
+	 * The `fullscreen` key goes both ways, as YouTube's own `f` did.
+	 *
+	 * Since #23 the embed's keyboard is off and the focus always comes back to the
+	 * page, so this handler is the only thing `f` ever reaches — and while the wrapper
+	 * is fullscreen the Fullscreen button under the player is off screen, so a key
+	 * that only ever entered would leave no way out but Escape (#24).
+	 *
+	 * @returns {Promise<void>}
+	 */
+	async function toggleFullscreen() {
+		if (fullscreen) {
+			await player?.exitFullscreen();
+			return;
+		}
+		await requestFullscreen();
+	}
+
 	/** @returns {void} */
 	function handleEnded() {
 		if (!current) return;
@@ -577,7 +595,7 @@
 				player?.changeVolume(action.percent);
 				break;
 			case 'fullscreen':
-				requestFullscreen();
+				toggleFullscreen();
 				break;
 			case 'undo':
 				undo();

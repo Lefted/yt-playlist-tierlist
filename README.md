@@ -301,7 +301,7 @@ Defaults — the letters, with `f` left to YouTube:
 | --------------------------------------- | ------------------------------------- |
 | `S` `A` `B` `C` `D`                     | Rate the current video with that tier |
 | `Shift`+`F`                             | Rate it F                             |
-| `F`                                     | Fullscreen (as on YouTube)            |
+| `F`                                     | Fullscreen on / off (as on YouTube)   |
 | `N`                                     | Next video                            |
 | `P`                                     | Previous video                        |
 | `R`                                     | Replay from the start                 |
