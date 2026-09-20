@@ -120,6 +120,14 @@ describe('the player keys, on or off', () => {
 		expect(shortcutFor(keydown('j'), options)).toEqual({ type: 'seekBy', seconds: -10 });
 	});
 
+	it.each([true, false])('answers the volume arrows (rating keys: %s)', (on) => {
+		// The embed answers no key of its own since `disablekb: 1`, so without these the
+		// volume would have no key at all (issue #23).
+		const options = { ratingKeys: on };
+		expect(shortcutFor(keydown('ArrowUp'), options)).toEqual({ type: 'volumeBy', percent: 5 });
+		expect(shortcutFor(keydown('ArrowDown'), options)).toEqual({ type: 'volumeBy', percent: -5 });
+	});
+
 	it('ignores a held key — one f too long fullscreens twice, and seeks stay one jump', () => {
 		expect(shortcutFor(keydown('ArrowRight', { repeat: true }))).toBeNull();
 		expect(shortcutFor(keydown('f', { repeat: true }))).toBeNull();
@@ -417,6 +425,7 @@ describe('shortcutKeys', () => {
 			expect(keys.mute).toEqual(['M']);
 			expect(keys.seekForward).toEqual(['→', 'L']);
 			expect(keys.seekBack).toEqual(['←', 'J']);
+			expect(keys.volume).toEqual(['↑', '↓']);
 		}
 	});
 
@@ -475,6 +484,7 @@ describe('shortcutTable', () => {
 		expect(descriptions).toContain('Undo the last rating');
 		expect(descriptions).toContain('Loop the current video');
 		expect(descriptions).toContain('Mute / unmute');
+		expect(descriptions).toContain('Volume ±5 %');
 	});
 
 	it('drops an action the user unbound rather than showing an empty row', () => {

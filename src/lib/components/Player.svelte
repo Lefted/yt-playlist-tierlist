@@ -11,6 +11,7 @@
 	import {
 		enterFullscreen,
 		FULLSCREEN_EVENTS,
+		hasForeignFullscreen,
 		isFullscreenElement,
 		leaveFullscreen,
 		lockLandscape,
@@ -33,6 +34,9 @@
 	 * @property {(reason: import('$lib/youtube/iframe-api.js').PlayerErrorReason) => void} [onerror]
 	 * @property {(state: number) => void} [onstatechange] - See `PLAYER_STATE`.
 	 * @property {() => void} [onready] - The player is up and accepts commands.
+	 * @property {() => void} [onforeignfullscreen] - The embed took fullscreen for
+	 *   itself and has just been thrown out of it again; say so, because from the
+	 *   user's side a fullscreen simply flashed past.
 	 * @property {boolean} [fullscreen] - Bindable, read-only in practice: whether the
 	 *   wrapper is the browser's fullscreen element. Set it through
 	 *   {@link requestFullscreen}, not by assignment.
@@ -49,6 +53,7 @@
 		onerror,
 		onstatechange,
 		onready,
+		onforeignfullscreen,
 		fullscreen = $bindable(false),
 		children,
 		class: className
@@ -154,9 +159,12 @@
 	 * button, `Escape`, or the window manager.
 	 *
 	 * Only *our* wrapper counts. The embed has no fullscreen button of its own any
-	 * more (`fs: 0`), but a gesture we did not anticipate could still put the
-	 * cross-origin iframe in fullscreen: the overlay would not be on screen and the
-	 * keys would not reach us, so that is not our fullscreen.
+	 * more (`fs: 0`) and no keyboard either (`disablekb: 1`), but a gesture we did not
+	 * anticipate could still put the cross-origin iframe in fullscreen: the overlay
+	 * would not be on screen and the keys would not reach us, so that is not our
+	 * fullscreen — and it is not one to live with either. It is left again right away,
+	 * which needs no gesture of its own, and the page is told so it can say where the
+	 * fullscreen the user wanted actually is (issue #23).
 	 *
 	 * Leaving is also where the orientation lock is given back — whoever ended it,
 	 * our button or `Escape`.
@@ -173,6 +181,12 @@
 			if (was && !now) unlockOrientation(window.screen);
 			was = now;
 			fullscreen = now;
+
+			// Not `else`: this is a *different* element being fullscreen, not the absence
+			// of ours. Leaving it fires another `sync`, which finds nothing to do.
+			if (!hasForeignFullscreen(document, node)) return;
+			void leaveFullscreen(document);
+			onforeignfullscreen?.();
 		};
 
 		sync();
@@ -288,6 +302,40 @@
 	/** @returns {boolean} `false` while there is no player to ask. */
 	export function isMuted() {
 		return Boolean(api()?.isMuted());
+	}
+
+	/**
+	 * Move the volume, what `↑`/`↓` do on YouTube — proxied because the embed answers
+	 * no key of its own any more (`disablekb: 1`, issue #23).
+	 *
+	 * Raising it also unmutes, as YouTube's own arrow does: a volume key that leaves a
+	 * muted player silent is a key that did nothing as far as anyone can hear.
+	 *
+	 * @param {number} percent - Negative turns it down. Clamped to 0–100.
+	 * @returns {void}
+	 */
+	export function changeVolume(percent) {
+		const instance = api();
+		if (!instance) return;
+
+		instance.setVolume(Math.max(0, Math.min(100, instance.getVolume() + percent)));
+		if (percent > 0 && instance.isMuted()) instance.unMute();
+	}
+
+	/**
+	 * The embed's iframe, for the one question only the page can ask: whether the
+	 * focus has just moved into it (issue #23). Nothing is done *to* it here — a
+	 * cross-origin frame has nothing to offer but its identity.
+	 *
+	 * @returns {HTMLIFrameElement|null} `null` until the player is up.
+	 */
+	export function iframe() {
+		try {
+			return api()?.getIframe() ?? null;
+		} catch {
+			// A player mid-teardown throws rather than answering; there is no iframe then.
+			return null;
+		}
 	}
 
 	/** @returns {number} Playback position in seconds, `0` while there is no player. */

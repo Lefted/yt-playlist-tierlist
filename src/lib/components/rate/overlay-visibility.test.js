@@ -68,6 +68,34 @@ describe('overlayAfter', () => {
 		expect(after(['idle', 'leave']).visible).toBe(false);
 	});
 
+	it('toggles on a tap, the way YouTube’s mobile player hides its own controls', () => {
+		expect(after(['toggle']).visible).toBe(false);
+		expect(after(['toggle', 'toggle']).visible).toBe(true);
+		expect(after(['toggle', 'toggle', 'toggle']).visible).toBe(false);
+
+		// And a tap on a faded overlay is the way back, without waiting for anything.
+		expect(after(['idle', 'toggle']).visible).toBe(true);
+	});
+
+	it('lets a tap put away an overlay the countdown may not touch', () => {
+		// A hold means "do not fade away on your own", not "the user may not put you
+		// away": the tap is deliberate, and a video that ended unrated is still on the
+		// tier bar underneath.
+		const held = { held: true };
+		expect(after(['idle'], held).visible).toBe(true);
+		expect(after(['toggle'], held).visible).toBe(false);
+		expect(after(['toggle', 'toggle'], held).visible).toBe(true);
+	});
+
+	it('leaves the pointer flag alone, in both directions', () => {
+		for (const state of STATES) {
+			expect(overlayAfter(state, 'toggle')).toEqual({
+				visible: !state.visible,
+				hovering: state.hovering
+			});
+		}
+	});
+
 	it('takes the pointer onto a faded overlay as a reason to show it', () => {
 		// Hidden means `opacity-0`, not gone: the box still notices the pointer, which
 		// is the mouse user's way back to it.
@@ -119,6 +147,7 @@ describe('overlayAfter', () => {
 		const state = { visible: true, hovering: true };
 		for (const event of /** @type {OverlayEvent[]} */ ([
 			'wake',
+			'toggle',
 			'enter',
 			'leave',
 			'idle',

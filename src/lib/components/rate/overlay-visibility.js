@@ -49,10 +49,16 @@ export const OVERLAY_IDLE_MS = 3000;
  * from — the pointer on the box, a shortcut, a tap that moved the focus into the
  * iframe, the catch layer over the video — is the page's business, not ours.
  *
+ * `toggle` is the deliberate one: a tap on the video of a touch device, which on
+ * YouTube's mobile player takes the controls away again when they are showing
+ * (issue #23). It is the only event that may *hide* an overlay something is holding
+ * up — a hold means "do not let this fade away on its own", not "the user may not
+ * put it away".
+ *
  * `enter`/`leave` are the pointer arriving on and leaving the box, `idle` is the
  * countdown running out, and `reset` is fullscreen beginning or ending.
  *
- * @typedef {'wake'|'enter'|'leave'|'idle'|'reset'} OverlayEvent
+ * @typedef {'wake'|'toggle'|'enter'|'leave'|'idle'|'reset'} OverlayEvent
  */
 
 /** Where every fullscreen starts, and where leaving one puts it back. */
@@ -88,6 +94,14 @@ export function overlayAfter(state, event, context = {}) {
 	switch (event) {
 		case 'wake':
 			return { visible: true, hovering: state.hovering };
+
+		// A tap on the video, on a device where a tap is the only gesture there is: it
+		// means the opposite of whatever is on screen. `canHide` is deliberately not
+		// asked — that question is "may this fade out by itself", and this is the user
+		// saying so. The hovering flag is carried along untouched; a touch screen has no
+		// hover to lose, and a mouse setup never sends this event.
+		case 'toggle':
+			return { visible: !state.visible, hovering: state.hovering };
 
 		// The pointer is on the box: it stays up until the pointer goes away again,
 		// because hiding the thing somebody is reaching for is the one unforgivable

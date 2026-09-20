@@ -6,7 +6,7 @@
 	 * we are in it belongs to `session`, and every rating goes straight into
 	 * `library`, which persists it.
 	 */
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { afterNavigate, replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -33,6 +33,12 @@
 	import { awaitsRating, endedAction } from '$lib/components/rate/playback.js';
 	import { shortcutFor, shortcutsEnabled } from '$lib/components/rate/shortcuts.js';
 	import { describeUndo } from '$lib/components/rate/undo.js';
+	import {
+		blurResponse,
+		FOCUS_HANDBACK_MS,
+		focusEnteredPlayer,
+		TOUCH_QUERY
+	} from '$lib/components/rate/window-blur.js';
 	import { library } from '$lib/state/library.svelte.js';
 	import { session } from '$lib/state/session.svelte.js';
 	import { settings } from '$lib/state/settings.svelte.js';
@@ -54,6 +60,25 @@
 
 	/** @type {boolean} The player's own wrapper is the browser's fullscreen element. */
 	let fullscreen = $state(false);
+
+	/**
+	 * @type {boolean} Whether a finger is driving this session. It decides what a tap
+	 * on the video means — see `window-blur.js`.
+	 */
+	let touch = $state(false);
+
+	$effect(() => {
+		const query = window.matchMedia(TOUCH_QUERY);
+		const sync = () => {
+			touch = query.matches;
+		};
+
+		sync();
+		// A tablet that gains a keyboard case mid-session flips this, and so does
+		// Chrome's device emulation, which is where this gets tested.
+		query.addEventListener('change', sync);
+		return () => query.removeEventListener('change', sync);
+	});
 
 	/** @type {string|null} Video the fullscreen request was already made for. */
 	let fullscreenFor = null;
@@ -178,10 +203,11 @@
 	/**
 	 * A sign of life: show the fullscreen overlay and give it three more seconds.
 	 *
-	 * Guarded here rather than at each of the four call sites, as `recoverFocus` does:
-	 * outside fullscreen there is no overlay, and the signals that feed this — a
-	 * keystroke, the end of a video, the focus leaving the window — all happen there
-	 * too.
+	 * Guarded here rather than at each call site, as `recoverFocus` does: outside
+	 * fullscreen there is no overlay, and the signals that feed this — a keystroke, the
+	 * end of a video, the pointer on the box — all happen there too. The one signal
+	 * that does not come through here is the `blur`, which has a second meaning on a
+	 * touch device and a module of its own (`window-blur.js`).
 	 *
 	 * @returns {void}
 	 */
@@ -190,39 +216,59 @@
 	}
 
 	/**
-	 * Feed the overlay's state machine, and act on the one transition the page owes it.
+	 * Feed the overlay's state machine.
 	 *
 	 * @param {import('$lib/components/rate/overlay-visibility.js').OverlayEvent} event
 	 * @returns {void}
 	 */
 	function overlayEvent(event) {
-		const before = overlay;
-		overlay = overlayAfter(before, event, { held: overlayHeld });
-
-		// A tap on the video hands the keyboard to the iframe, and we want it back — but
-		// not at the moment of the tap: taking the focus out from under YouTube's own
-		// menus while they are opening is what issue #9 already learned to avoid. The end
-		// of the countdown is the quiet moment to do it, and it leaves the *next* tap
-		// free to announce itself as another `blur`.
-		if (before.visible && !overlay.visible) recoverFocus();
+		overlay = overlayAfter(overlay, event, { held: overlayHeld });
 	}
 
 	/**
 	 * The focus left our document.
 	 *
-	 * On a touch screen that is the only trace of a tap on the video we ever get: the
-	 * iframe is cross-origin and swallows every event inside it, but moving the focus
-	 * into it makes the window lose the focus, and that we can hear.
-	 *
-	 * Other things blur a window too — switching app or tab, most of all. Waking for
-	 * those is the harmless half of the trade: the overlay comes up on a screen nobody
-	 * is looking at, and fades again three seconds later.
+	 * The only trace a tap or click on the video ever leaves: the iframe is
+	 * cross-origin and swallows every event inside it, but the focus moving into it
+	 * blurs our window, and that we can hear. What that is worth — a toggle, a wake,
+	 * the keyboard back — is `window-blur.js`; this is where the page looks the
+	 * situation up and acts on the answer.
 	 *
 	 * @returns {void}
 	 */
 	function handleWindowBlur() {
-		wake();
+		const answer = blurResponse({
+			intoPlayer: focusEnteredPlayer(document, player?.iframe()),
+			touch,
+			fullscreen
+		});
+
+		if (answer.overlay) overlayEvent(answer.overlay);
+		if (answer.recoverFocus) handBackKeyboard();
 	}
+
+	/** @type {ReturnType<typeof setTimeout>|undefined} The pending hand-back. */
+	let handBack;
+
+	/**
+	 * Take the keyboard back from the iframe, shortly.
+	 *
+	 * Shortly, and not now: a tap on the embed may be opening one of YouTube's own
+	 * menus, and pulling the focus away while that happens closes it again (issue #9).
+	 * The wait is also why the situation is looked up a second time on arrival — a
+	 * quarter of a second is long enough for the user to have reached something of
+	 * ours, and that focus is theirs.
+	 *
+	 * @returns {void}
+	 */
+	function handBackKeyboard() {
+		clearTimeout(handBack);
+		handBack = setTimeout(() => {
+			if (focusEnteredPlayer(document, player?.iframe())) player?.focus();
+		}, FOCUS_HANDBACK_MS);
+	}
+
+	onDestroy(() => clearTimeout(handBack));
 
 	/** A new video starts unjudged; drop the "it ended" highlight. */
 	$effect(() => {
@@ -471,6 +517,9 @@
 			case 'seekBy':
 				player?.seekBy(action.seconds);
 				break;
+			case 'volumeBy':
+				player?.changeVolume(action.percent);
+				break;
 			case 'fullscreen':
 				requestFullscreen();
 				break;
@@ -536,6 +585,8 @@
 					onended={handleEnded}
 					onerror={handlePlayerError}
 					onstatechange={handleStateChange}
+					onforeignfullscreen={() =>
+						toast.info("Use the app's Fullscreen button or F.", { duration: 4000 })}
 				>
 					{#if fullscreen}
 						<PlayerOverlay

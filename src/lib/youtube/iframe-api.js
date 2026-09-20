@@ -46,6 +46,8 @@ const UNAVAILABLE_CODES = [100, 101, 150];
  * @property {() => void} mute
  * @property {() => void} unMute
  * @property {() => boolean} isMuted
+ * @property {() => number} getVolume - 0–100, whether or not the player is muted.
+ * @property {(volume: number) => void} setVolume - 0–100; anything else is clamped.
  * @property {() => HTMLIFrameElement|null} getIframe
  * @property {() => void} destroy
  */

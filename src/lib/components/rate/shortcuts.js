@@ -20,6 +20,13 @@
  *   different depending on a focus you cannot see is a trap. They are not
  *   rebindable — they mirror YouTube — but a rating binding may shadow one.
  *
+ * Since issue #23 the embed is created with `disablekb: 1`, so the iframe answers
+ * none of them any more even when it does have the focus. That makes this table the
+ * *only* keyboard the player has, which is why `↑`/`↓` are in it: without them the
+ * volume would have no key at all. The cost is that neither arrow scrolls the Rate
+ * page any more — the same trade YouTube's own watch page makes while its player
+ * has the focus.
+ *
  * The bindings themselves — the chord grammar, the bindable actions, the defaults
  * and the editing operations — are `$lib/keybindings.js`, because
  * `state/settings.svelte.js` needs the same vocabulary to load and persist them.
@@ -50,6 +57,7 @@ import { TIERS } from '$lib/tiers.js';
  * What the user asked for.
  * @typedef {{ type: 'rate', rating: Rating }
  *   | { type: 'seekBy', seconds: number }
+ *   | { type: 'volumeBy', percent: number }
  *   | { type: 'next' | 'previous' | 'replay' | 'playPause' | 'muteToggle'
  *       | 'fullscreen' | 'undo' | 'loop' | 'toggleOverlay' | 'help' }} ShortcutAction
  */
@@ -57,6 +65,9 @@ import { TIERS } from '$lib/tiers.js';
 /** How far `←`/`→` and `j`/`l` jump, as YouTube does it. */
 const SMALL_SEEK_SECONDS = 5;
 const LARGE_SEEK_SECONDS = 10;
+
+/** How much `↑`/`↓` move the volume, as YouTube does it. */
+const VOLUME_STEP_PERCENT = 5;
 
 /**
  * Elements that swallow the shortcuts because the user is typing into them.
@@ -108,6 +119,15 @@ const PLAYER_ROWS = [
 		description: 'Mute / unmute',
 		shadows: 'mute',
 		keys: [['m', { type: 'muteToggle' }]]
+	},
+	{
+		id: 'volume',
+		description: `Volume ±${VOLUME_STEP_PERCENT} %`,
+		shadows: 'volume',
+		keys: [
+			['ArrowUp', { type: 'volumeBy', percent: VOLUME_STEP_PERCENT }],
+			['ArrowDown', { type: 'volumeBy', percent: -VOLUME_STEP_PERCENT }]
+		]
 	},
 	{
 		id: 'seekBack',

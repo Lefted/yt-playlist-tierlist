@@ -3,6 +3,7 @@ import {
 	enterFullscreen,
 	FULLSCREEN_EVENTS,
 	fullscreenElementOf,
+	hasForeignFullscreen,
 	isFullscreenElement,
 	leaveFullscreen,
 	lockLandscape,
@@ -39,6 +40,40 @@ describe('isFullscreenElement', () => {
 	it('is false when nothing is fullscreen or there is no element', () => {
 		expect(isFullscreenElement({}, {})).toBe(false);
 		expect(isFullscreenElement({ fullscreenElement: null }, null)).toBe(false);
+	});
+});
+
+describe('hasForeignFullscreen', () => {
+	/**
+	 * @param {unknown[]} children - What this wrapper contains.
+	 * @returns {{ contains: (node: unknown) => boolean }}
+	 */
+	const wrapperOf = (children) => ({ contains: (node) => children.includes(node) });
+
+	it('is the embed having taken the screen for itself', () => {
+		const iframe = {};
+		const wrapper = wrapperOf([iframe]);
+
+		expect(hasForeignFullscreen({ fullscreenElement: iframe }, wrapper)).toBe(true);
+		expect(hasForeignFullscreen({ webkitFullscreenElement: iframe }, wrapper)).toBe(true);
+	});
+
+	it('is not our own fullscreen', () => {
+		// The wrapper contains itself as far as the DOM is concerned; this question is
+		// only about somebody else.
+		const wrapper = wrapperOf([]);
+		expect(hasForeignFullscreen({ fullscreenElement: wrapper }, wrapper)).toBe(false);
+	});
+
+	it('is not a fullscreen somewhere else on the page', () => {
+		const wrapper = wrapperOf([]);
+		expect(hasForeignFullscreen({ fullscreenElement: {} }, wrapper)).toBe(false);
+	});
+
+	it('is false with nothing fullscreen, no element and no document', () => {
+		expect(hasForeignFullscreen({}, wrapperOf([]))).toBe(false);
+		expect(hasForeignFullscreen({ fullscreenElement: {} }, null)).toBe(false);
+		expect(hasForeignFullscreen(null, wrapperOf([]))).toBe(false);
 	});
 });
 
