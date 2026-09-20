@@ -1,9 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { blurResponse, FOCUS_HANDBACK_MS, focusEnteredPlayer, TOUCH_QUERY } from './window-blur.js';
+import {
+	blurResponse,
+	FOCUS_HANDBACK_MS,
+	focusEnteredPlayer,
+	OUR_OWN_FOCUS_MS
+} from './window-blur.js';
 
 /** Stand-ins: the module only ever compares identities. */
 const iframe = { name: 'the embed' };
 const somethingElse = { name: 'a filter popover' };
+
+/** A tap on the video, fullscreen, on a touch screen — the case the module is for. */
+const TAP = {
+	intoPlayer: true,
+	hidden: false,
+	touch: true,
+	fullscreen: true,
+	sinceOurs: Infinity
+};
 
 describe('focusEnteredPlayer', () => {
 	it('is the iframe having the focus, and nothing else', () => {
@@ -27,46 +41,69 @@ describe('focusEnteredPlayer', () => {
 
 describe('blurResponse', () => {
 	it('toggles the overlay when a finger taps the video', () => {
-		expect(blurResponse({ intoPlayer: true, touch: true, fullscreen: true })).toEqual({
-			overlay: 'toggle',
-			recoverFocus: true
-		});
+		expect(blurResponse(TAP)).toEqual({ overlay: 'toggle', recoverFocus: true });
 	});
 
 	it('only wakes it when a mouse clicks the video', () => {
 		// A click on a desktop is play/pause; taking the controls away under a hand that
 		// is about to use them would be its own bug.
-		expect(blurResponse({ intoPlayer: true, touch: false, fullscreen: true })).toEqual({
+		expect(blurResponse({ ...TAP, touch: false })).toEqual({
 			overlay: 'wake',
 			recoverFocus: true
 		});
 	});
 
-	it('does not toggle for a blur that is not a tap on the video', () => {
-		// Switching tab or app blurs the window too, and an overlay that vanished while
-		// the user was away would be a mystery on the way back.
-		expect(blurResponse({ intoPlayer: false, touch: true, fullscreen: true }).overlay).toBe('wake');
-		expect(blurResponse({ intoPlayer: false, touch: false, fullscreen: true }).overlay).toBe(
-			'wake'
-		);
+	it('leaves the overlay alone when the page moved the focus itself', () => {
+		// Rate with the overlay's own tier button: the next video loads, the embed takes
+		// the focus with it, and the blur that follows is not a tap. Before this, the
+		// overlay vanished on every rating made from it.
+		for (const touch of [true, false]) {
+			expect(blurResponse({ ...TAP, touch, sinceOurs: 0 })).toEqual({
+				overlay: null,
+				recoverFocus: true
+			});
+			expect(blurResponse({ ...TAP, touch, sinceOurs: OUR_OWN_FOCUS_MS - 1 }).overlay).toBeNull();
+		}
+
+		// …and a tap long enough afterwards is a tap again.
+		expect(blurResponse({ ...TAP, sinceOurs: OUR_OWN_FOCUS_MS }).overlay).toBe('toggle');
+	});
+
+	it('does nothing at all for a tab or app switch', () => {
+		// Nobody is looking: an overlay that woke here would spend its three seconds on
+		// a screen that is somewhere else, and there is no keyboard to fight over.
+		for (const intoPlayer of [true, false]) {
+			expect(blurResponse({ ...TAP, hidden: true, intoPlayer })).toEqual({
+				overlay: null,
+				recoverFocus: false
+			});
+		}
+	});
+
+	it('takes no focus from anything that is not the iframe', () => {
+		// The address bar, devtools, another window of ours — in fullscreen that is still
+		// a sign of life, but never a reason to grab the keyboard.
+		for (const touch of [true, false]) {
+			expect(blurResponse({ ...TAP, intoPlayer: false, touch })).toEqual({
+				overlay: 'wake',
+				recoverFocus: false
+			});
+		}
 	});
 
 	it('has no overlay to speak of outside fullscreen', () => {
 		for (const touch of [true, false]) {
 			for (const intoPlayer of [true, false]) {
-				expect(blurResponse({ intoPlayer, touch, fullscreen: false }).overlay).toBeNull();
+				expect(blurResponse({ ...TAP, fullscreen: false, intoPlayer, touch }).overlay).toBeNull();
 			}
 		}
 	});
 
-	it('takes the keyboard back exactly when the iframe took it, fullscreen or not', () => {
-		for (const fullscreen of [true, false]) {
-			for (const touch of [true, false]) {
-				expect(blurResponse({ intoPlayer: true, touch, fullscreen }).recoverFocus).toBe(true);
-				// Never from anything of ours: a popover, the tier bar, a dialog.
-				expect(blurResponse({ intoPlayer: false, touch, fullscreen }).recoverFocus).toBe(false);
-			}
-		}
+	it('takes the keyboard back from the iframe fullscreen or not', () => {
+		// Outside fullscreen the page still owns the rating keys, and with `disablekb: 1`
+		// a key pressed into the embed goes nowhere at all.
+		expect(blurResponse({ ...TAP, fullscreen: false }).recoverFocus).toBe(true);
+		expect(blurResponse({ ...TAP, fullscreen: false, sinceOurs: 0 }).recoverFocus).toBe(true);
 	});
 });
 
@@ -77,7 +114,8 @@ describe('the constants', () => {
 		expect(FOCUS_HANDBACK_MS).toBe(250);
 	});
 
-	it('asks for a touch screen the way `PointerWake` asks for a mouse', () => {
-		expect(TOUCH_QUERY).toBe('(hover: none) and (pointer: coarse)');
+	it('gives a video change long enough to grab the focus', () => {
+		expect(OUR_OWN_FOCUS_MS).toBe(1000);
+		expect(OUR_OWN_FOCUS_MS).toBeGreaterThan(FOCUS_HANDBACK_MS);
 	});
 });

@@ -19,18 +19,34 @@
  *   `disablekb: 1` it goes nowhere at all. Handing it back is also what makes the
  *   *next* tap produce a fresh blur; without it only the first one would count.
  *
- * A window blurs for other reasons too — switching tab or app, most of all. Those
- * are not taps on the video: `document.activeElement` is still ours, so nothing is
- * toggled and no focus is taken. See issue #23.
+ * The hard part is that a blur is not proof of a tap. Three other things produce
+ * one, and each is told apart by a different signal:
+ *
+ * - **Switching tab or app** — the document is hidden. Nobody is looking, so nothing
+ *   moves and no focus is taken.
+ * - **The focus leaving for the address bar, devtools, another window** —
+ *   `document.activeElement` is not the iframe.
+ * - **Us** — the page loads the next video and the embed takes the focus along with
+ *   it. That blur is indistinguishable from a tap by any signal the browser offers,
+ *   so the page has to remember: it stamps the moment it did something that moves
+ *   the focus, and a blur within {@link OUR_OWN_FOCUS_MS} of that stamp is ours.
+ *   Without the stamp, rating a video with the overlay's own tier button would load
+ *   the next one and take the overlay away with it.
+ *
+ * All of them are only distinguishable a tick after the event — the focus has not
+ * settled while `blur` is being dispatched — which is why the page asks this from a
+ * `setTimeout` rather than in the handler. See issue #23.
  */
 
 /**
- * A device where a tap is the only gesture there is: no hover, no fine pointer.
+ * How long after the page moved the focus itself a blur still counts as ours.
  *
- * The inverse of `PointerWake`'s query, and deliberately the same shape, so the two
- * halves of "who is driving this session" cannot drift apart.
+ * Generous on purpose: what has to happen in between is the IFrame API loading a
+ * video. The only cost of being too generous is that a genuine tap within a second
+ * of a video change does not toggle the overlay — one second during which the
+ * overlay has just come back up anyway.
  */
-export const TOUCH_QUERY = '(hover: none) and (pointer: coarse)';
+export const OUR_OWN_FOCUS_MS = 1000;
 
 /**
  * How long to wait before taking the keyboard back from the iframe.
@@ -43,11 +59,11 @@ export const TOUCH_QUERY = '(hover: none) and (pointer: coarse)';
 export const FOCUS_HANDBACK_MS = 250;
 
 /**
- * Is the focus now in the player's iframe?
+ * Is the focus in the player's iframe?
  *
  * The guard on `iframe` is the point of the function and not defensive padding:
  * before the player is up there is no iframe, `document.activeElement` can be
- * `null` too, and `null === null` would hand the focus to the player on every blur
+ * `null` too, and `null === null` would report a tap on the video on every blur
  * from anywhere.
  *
  * @param {{ activeElement?: unknown }|null|undefined} doc - Usually `document`.
@@ -60,17 +76,21 @@ export function focusEnteredPlayer(doc, iframe) {
 
 /**
  * @typedef {Object} BlurSituation
- * @property {boolean} intoPlayer - The focus landed in the embed's iframe; see
- *   {@link focusEnteredPlayer}.
- * @property {boolean} touch - {@link TOUCH_QUERY} matches.
+ * @property {boolean} intoPlayer - The focus is in the embed's iframe; see
+ *   {@link focusEnteredPlayer}, and ask a tick after the event.
+ * @property {boolean} hidden - `document.visibilityState === 'hidden'`: the tab or
+ *   the app went away.
+ * @property {boolean} touch - A touch screen is driving this session.
  * @property {boolean} fullscreen - Our wrapper is the fullscreen element, which is
  *   the only time the overlay exists at all.
+ * @property {number} sinceOurs - Milliseconds since the page last moved the focus
+ *   itself; `Infinity` when it never has.
  */
 
 /**
  * @typedef {Object} BlurResponse
  * @property {'wake'|'toggle'|null} overlay - The event to feed the overlay's state
- *   machine, or `null` when there is no overlay on screen to feed.
+ *   machine, or `null` to leave it exactly as it is.
  * @property {boolean} recoverFocus - Take the keyboard back, after
  *   {@link FOCUS_HANDBACK_MS}.
  */
@@ -79,14 +99,20 @@ export function focusEnteredPlayer(doc, iframe) {
  * @param {BlurSituation} situation
  * @returns {BlurResponse}
  */
-export function blurResponse({ intoPlayer, touch, fullscreen }) {
-	return {
-		// The tap-to-hide half needs both: a touch device, and a tap that actually
-		// landed on the video rather than the user leaving for another tab.
-		overlay: fullscreen ? (intoPlayer && touch ? 'toggle' : 'wake') : null,
-		// In and out of fullscreen. Outside it the page still owns the keyboard — the
-		// tier bar, undo, the rating keys — and the iframe is the only thing we ever
-		// take it back from.
-		recoverFocus: intoPlayer
-	};
+export function blurResponse({ intoPlayer, hidden, touch, fullscreen, sinceOurs }) {
+	// Gone to another tab or another app. Waking an overlay nobody can see would spend
+	// its three seconds while the screen is elsewhere, and there is no keyboard worth
+	// fighting over until the page is back.
+	if (hidden) return { overlay: null, recoverFocus: false };
+
+	// The focus went somewhere that is not the video: the address bar, devtools,
+	// another window. Nothing to take back, and in fullscreen it is still a sign of
+	// life — the harmless half of the trade issue #20 settled on.
+	if (!intoPlayer) return { overlay: fullscreen ? 'wake' : null, recoverFocus: false };
+
+	// The embed has the focus and we are why. The keyboard still has to come back, but
+	// the overlay must not move: the user pressed a button of ours, not the video.
+	if (sinceOurs < OUR_OWN_FOCUS_MS) return { overlay: null, recoverFocus: true };
+
+	return { overlay: fullscreen ? (touch ? 'toggle' : 'wake') : null, recoverFocus: true };
 }

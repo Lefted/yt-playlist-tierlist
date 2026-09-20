@@ -38,29 +38,6 @@ export function isFullscreenElement(doc, element) {
 }
 
 /**
- * Has something *inside* this element taken fullscreen for itself?
- *
- * The one case that matters is the embed's iframe: a cross-origin document in
- * fullscreen owns the whole screen and the keyboard with it, so our overlay — the
- * only way to rate a video from there — is nowhere, and no key reaches us (issue
- * #9). The embed is built with `fs: 0` and `disablekb: 1` so that it has no way in
- * left, but "no way we know of" is not "no way", and the answer to this question is
- * a fullscreen to leave again rather than one to render into (issue #23).
- *
- * The element itself does not count: that is our own fullscreen, which
- * {@link isFullscreenElement} is about.
- *
- * @param {any} doc
- * @param {any} element
- * @returns {boolean}
- */
-export function hasForeignFullscreen(doc, element) {
-	const current = fullscreenElementOf(doc);
-	if (!current || current === element) return false;
-	return Boolean(element?.contains?.(current));
-}
-
-/**
  * Ask for fullscreen on an element.
  *
  * @param {any} element

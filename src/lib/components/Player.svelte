@@ -11,7 +11,6 @@
 	import {
 		enterFullscreen,
 		FULLSCREEN_EVENTS,
-		hasForeignFullscreen,
 		isFullscreenElement,
 		leaveFullscreen,
 		lockLandscape,
@@ -182,11 +181,12 @@
 			was = now;
 			fullscreen = now;
 
-			// Not `else`: this is a *different* element being fullscreen, not the absence
-			// of ours. Leaving it fires another `sync`, which finds nothing to do.
-			if (!hasForeignFullscreen(document, node)) return;
-			void leaveFullscreen(document);
-			onforeignfullscreen?.();
+			// Not `else`: this is the *iframe* being fullscreen, not the absence of ours.
+			// Nothing else inside the wrapper is asked about — a fullscreen of our own
+			// content would be ours to keep, and only the cross-origin frame takes the
+			// keyboard and the overlay with it. Leaving it fires another `sync`, which
+			// finds nothing left to do.
+			if (isFullscreenElement(document, iframe())) void escapeTheEmbed();
 		};
 
 		sync();
@@ -198,6 +198,19 @@
 			if (was) unlockOrientation(window.screen);
 		};
 	});
+
+	/**
+	 * Throw the embed out of a fullscreen it took for itself.
+	 *
+	 * The callback waits for the answer rather than for the call: a browser that will
+	 * not leave leaves the user in YouTube's fullscreen, and a message pointing at a
+	 * button they cannot see would be worse than saying nothing at all.
+	 *
+	 * @returns {Promise<void>}
+	 */
+	async function escapeTheEmbed() {
+		if (await leaveFullscreen(document)) onforeignfullscreen?.();
+	}
 
 	/** Feed a new video into the existing player. */
 	$effect(() => {

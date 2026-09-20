@@ -13,8 +13,9 @@
 	 * **Mouse setups only.** On a touch screen the layer would eat the tap that
 	 * YouTube needs — and a tap barely moves a pointer, so it would not even wake the
 	 * overlay in exchange. There, a tap on the video moves the focus into the iframe
-	 * and the Rate page hears that as a `blur` instead. Hence the media query, and
-	 * hence the layer starts absent and appears only once a fine, hovering pointer has
+	 * and the Rate page hears that as a `blur` instead — which is the same question
+	 * asked from the other side, so both queries live in `$lib/media.svelte.js`. Hence
+	 * the layer starts absent and appears only once a fine, hovering pointer has
 	 * actually been seen.
 	 *
 	 * `pointerdown` wakes as well as `pointermove`, which the issue did not ask for: a
@@ -23,8 +24,7 @@
 	 * — would be swallowed with nothing to show for it.
 	 */
 
-	/** Not a touch screen: a mouse or a trackpad, something that can hover a pixel. */
-	const MOUSE_QUERY = '(hover: hover) and (pointer: fine)';
+	import { matchesMedia, MOUSE_QUERY } from '$lib/media.svelte.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -34,24 +34,11 @@
 	/** @type {Props} */
 	let { onwake } = $props();
 
-	/** @type {boolean} Whether a mouse is driving this session. */
-	let mouse = $state(false);
-
-	$effect(() => {
-		const query = window.matchMedia(MOUSE_QUERY);
-		const sync = () => {
-			mouse = query.matches;
-		};
-
-		sync();
-		// A tablet with a keyboard case attached mid-session flips this; so does
-		// Chrome's device emulation, which is where this gets tested.
-		query.addEventListener('change', sync);
-		return () => query.removeEventListener('change', sync);
-	});
+	/** Whether a mouse is driving this session; the Rate page asks the other half. */
+	const mouse = matchesMedia(MOUSE_QUERY);
 </script>
 
-{#if mouse}
+{#if mouse.current}
 	<!--
 		No `z-index`: the overlay's box is `z-10` and stays above this, so moving onto
 		the box is heard by the box itself. Everything else on the surface is the

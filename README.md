@@ -369,8 +369,11 @@ video has ended unrated.
 **On a touch screen a tap on the video toggles it**, exactly as a tap hides
 YouTube's own controls when they are showing: tap to put it away, tap again to
 bring it back, and the three-second fade still runs in between. Taps on the
-overlay itself are not taps on the video, so its own buttons never hide it. On a
-mouse setup the same click stays play/pause and only wakes the overlay.
+overlay itself are not taps on the video, so its own buttons never hide it — nor
+does the video change that a rating or a skip sets off, even though the embed
+grabs the keyboard when it loads. On a mouse setup the same click stays
+play/pause and only wakes the overlay. Switching tab or app leaves the overlay
+exactly as it was.
 
 The eye button at its left edge (or `Shift`+`H`) is the
 other, lasting way to get it out of the picture: it shrinks the box down to just
@@ -571,8 +574,12 @@ place; the configuration lives in `components.json`.
   `setTimeout` and the signals that count as a sign of life),
   `components/rate/window-blur.js` (what a `window` blur is worth — the only trace a
   tap on the cross-origin video ever leaves: a toggle on touch, a wake on a mouse,
-  and the keyboard back out of the iframe either way)
+  the keyboard back out of the iframe, or nothing at all, because a tab switch and a
+  video change of our own blur the window too)
   and `components/rate/undo.js` (how a reversible step reads).
+- `src/lib/media.svelte.js` answers "who is driving this session" as reactive state:
+  the mouse query `PointerWake` needs and the touch query the blur rule needs, in one
+  place so the two cannot drift apart.
 - Three tier controls, all driven by `src/lib/tiers.js`:
   `components/TierPicker.svelte` (compact, on a Browse card, with a clear button),
   `components/rate/TierBar.svelte` (thumb-sized, sticky, with the bound key as a
