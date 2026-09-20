@@ -76,6 +76,9 @@
  *   keys are proxied either way.
  * @property {Keybindings} keybindings - Which key each rating action answers to.
  * @property {boolean} loop
+ * @property {boolean} overlayCollapsed - Whether the fullscreen overlay is tucked
+ *   away into its eye button. A device preference like the rest of this file: it is
+ *   about the screen in front of you, and it never reaches the server.
  */
 
 /**

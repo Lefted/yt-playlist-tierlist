@@ -33,7 +33,8 @@ const DEFAULTS = {
 	fullscreenOnPlay: false,
 	shortcuts: true,
 	keybindings: normalizeKeybindings(DEFAULT_KEYBINDINGS),
-	loop: false
+	loop: false,
+	overlayCollapsed: false
 };
 
 class SettingsStore {
@@ -45,6 +46,7 @@ class SettingsStore {
 	// given, and a rune-proxied default table would be shared with every write.
 	#keybindings = $state(normalizeKeybindings(DEFAULTS.keybindings));
 	#loop = $state(DEFAULTS.loop);
+	#overlayCollapsed = $state(DEFAULTS.overlayCollapsed);
 
 	constructor() {
 		this.#apply(load(STORAGE_KEY, DEFAULTS));
@@ -124,6 +126,20 @@ class SettingsStore {
 	}
 
 	/**
+	 * @returns {boolean} Whether the fullscreen overlay is tucked away into its eye
+	 * button (#19). Remembered rather than reset per video: having hidden the controls
+	 * once, the user means the next video too — and the next fullscreen after that.
+	 */
+	get overlayCollapsed() {
+		return this.#overlayCollapsed;
+	}
+
+	set overlayCollapsed(value) {
+		this.#overlayCollapsed = Boolean(value);
+		this.#persist();
+	}
+
+	/**
 	 * Plain snapshot, e.g. for tests or exports.
 	 * @returns {Settings}
 	 */
@@ -134,7 +150,8 @@ class SettingsStore {
 			fullscreenOnPlay: this.#fullscreenOnPlay,
 			shortcuts: this.#shortcuts,
 			keybindings: normalizeKeybindings(this.#keybindings),
-			loop: this.#loop
+			loop: this.#loop,
+			overlayCollapsed: this.#overlayCollapsed
 		};
 	}
 
@@ -155,6 +172,10 @@ class SettingsStore {
 		this.#shortcuts = typeof stored.shortcuts === 'boolean' ? stored.shortcuts : DEFAULTS.shortcuts;
 		this.#keybindings = normalizeKeybindings(stored.keybindings);
 		this.#loop = typeof stored.loop === 'boolean' ? stored.loop : DEFAULTS.loop;
+		this.#overlayCollapsed =
+			typeof stored.overlayCollapsed === 'boolean'
+				? stored.overlayCollapsed
+				: DEFAULTS.overlayCollapsed;
 	}
 
 	/** @returns {void} */

@@ -37,7 +37,8 @@ describe('defaults', () => {
 			fullscreenOnPlay: false,
 			shortcuts: true,
 			keybindings: DEFAULT_KEYS,
-			loop: false
+			loop: false,
+			overlayCollapsed: false
 		});
 	});
 });
@@ -54,7 +55,8 @@ describe('persistence', () => {
 			fullscreenOnPlay: false,
 			shortcuts: true,
 			keybindings: DEFAULT_KEYS,
-			loop: false
+			loop: false,
+			overlayCollapsed: false
 		});
 	});
 
@@ -68,7 +70,8 @@ describe('persistence', () => {
 				fullscreenOnPlay: true,
 				shortcuts: false,
 				keybindings: { ...DEFAULT_KEYS, rateS: ['q'] },
-				loop: true
+				loop: true,
+				overlayCollapsed: true
 			})
 		});
 
@@ -80,7 +83,8 @@ describe('persistence', () => {
 			fullscreenOnPlay: true,
 			shortcuts: false,
 			keybindings: { ...DEFAULT_KEYS, rateS: ['q'] },
-			loop: true
+			loop: true,
+			overlayCollapsed: true
 		});
 	});
 
@@ -118,6 +122,29 @@ describe('loop', () => {
 		const { settings } = await boot();
 		settings.loop = /** @type {any} */ ('yes');
 		expect(settings.loop).toBe(true);
+	});
+});
+
+describe('overlayCollapsed', () => {
+	it('starts expanded — the fullscreen controls are there until the user tucks them away', async () => {
+		const { settings } = await boot();
+		expect(settings.overlayCollapsed).toBe(false);
+	});
+
+	it('persists, so the collapse survives the next video and the next reload', async () => {
+		const { settings } = await boot();
+		settings.overlayCollapsed = true;
+		expect(JSON.parse(/** @type {string} */ (store.entries.get(KEY))).overlayCollapsed).toBe(true);
+
+		// …and a fresh store reads it back rather than starting expanded again.
+		const reloaded = await boot(Object.fromEntries(store.entries));
+		expect(reloaded.settings.overlayCollapsed).toBe(true);
+	});
+
+	it('coerces to a boolean', async () => {
+		const { settings } = await boot();
+		settings.overlayCollapsed = /** @type {any} */ ('yes');
+		expect(settings.overlayCollapsed).toBe(true);
 	});
 });
 
