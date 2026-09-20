@@ -178,8 +178,13 @@
 	<!--
 		Capped, not `max-w-full`: inside a `w-fit` box a long title would set the
 		width, and the box would be back to covering most of the picture.
+
+		On a phone in landscape it goes out of the flow altogether (`sr-only`, so a
+		screen reader still has it): the 28 px it costs is what would push the wrapped
+		button rows onto YouTube's progress bar, and of everything in this box the title
+		is what a user who just picked the video needs least.
 	-->
-	<p class="line-clamp-1 max-w-[20rem] pb-2 text-sm font-medium text-white/90">
+	<p class="tight:sr-only line-clamp-1 max-w-[20rem] pb-2 text-sm font-medium text-white/90">
 		{title}
 	</p>
 {/snippet}
@@ -192,7 +197,16 @@
 		be. Of that `pl-2.5`, 6 px is the gap to the eye and 4 px is the ring room.
 	-->
 	<div class="flex flex-col items-start gap-2 p-1 pl-2.5">
-		<div class="flex flex-wrap items-center gap-1.5">
+		<!--
+			The cap is what folds the row into the left third of a phone in landscape,
+			where the middle belongs to YouTube's own play cluster: 8 rem takes three 36 px
+			buttons and no more, and with the eye, the gap and the box's padding beside it
+			that puts the right edge at 210 px — just inside the third of a 640 px screen,
+			and well inside it at 780. The box is `w-fit`, so capping the row is what sizes
+			the box; the `max-w` above is left to say one thing only, which is where the
+			embed's own corner buttons start.
+		-->
+		<div class="tight:max-w-[8rem] flex flex-wrap items-center gap-1.5">
 			{#each TIERS as tier (tier.rating)}
 				<button
 					type="button"
@@ -202,7 +216,11 @@
 					onclick={() => onrate(tier.rating)}
 					class={cn(
 						TIER_BUTTON_BASE,
-						'h-10 w-11 rounded-md text-lg leading-none sm:h-11 sm:w-14',
+						'h-10 w-11 rounded-md text-lg leading-none',
+						// Bigger only where there is room in *both* directions, smaller on a phone
+						// in landscape — where six of these plus four more have to fold into a
+						// third of the width without reaching the bottom bar.
+						'roomy:h-11 roomy:w-14 tight:h-9 tight:w-9 tight:text-base',
 						tier.solid,
 						rating === tier.rating && cn('ring-2 ring-offset-2 ring-offset-black', tier.ring),
 						awaitingRating && 'animate-pulse motion-reduce:animate-none'
@@ -225,7 +243,8 @@
 					class={cn(
 						TIER_BUTTON_BASE,
 						ICON_BUTTON,
-						'h-10 w-11 rounded-md sm:h-11 sm:w-12',
+						'h-10 w-11 rounded-md',
+						'roomy:h-11 roomy:w-12 tight:h-9 tight:w-9',
 						'disabled:pointer-events-none disabled:opacity-40'
 					)}
 				>
@@ -243,15 +262,16 @@
 <!--
 	The box is not a control itself — it only notices that the pointer is around, hence
 	the `svelte-ignore` below. It is also the only thing this component paints, so a
-	click anywhere else on the video reaches the player. Its backdrop is what keeps the buttons readable now that
-	the page-wide gradient is gone.
+	click anywhere else on the video reaches the player. Its backdrop is what keeps the
+	buttons readable now that the page-wide gradient is gone.
 
 	The `max-w` is the right-hand budget of the header comment: 15 rem minus the left
 	margin leaves the embed's corner buttons a clear 14 rem. Below `sm` that would
 	leave too little to lay the buttons out in at all, so down there the only reserve
 	is the top offset, which already clears the embed's chrome. `w-fit` and the
 	wrapping button row are what keep a phone in landscape working: the box is only as
-	wide as its content, which folds into a second row rather than growing.
+	wide as its content, which folds into more rows rather than growing — and how wide
+	that content may get is the row's own cap, further down.
 
 	Its padding goes with the content: collapsed, the box has to be the 44 px button
 	and nothing more, so the padding animates away alongside the two regions.
@@ -265,10 +285,11 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class={cn(
-		'absolute top-24 left-3 z-10 flex w-fit max-w-[calc(100%-1.5rem)] flex-col items-start',
+		'absolute top-24 left-3 z-10 flex w-fit flex-col items-start',
+		'max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-15rem)]',
 		'rounded-xl bg-black/60 backdrop-blur',
 		'transition-[padding,opacity] duration-200 ease-out motion-reduce:transition-none',
-		collapsed ? 'p-0' : 'p-2 sm:p-3',
+		collapsed ? 'p-0' : 'roomy:p-3 p-2',
 		!visible && 'opacity-0'
 	)}
 	onpointermove={onactivity}

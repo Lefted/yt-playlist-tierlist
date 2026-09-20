@@ -4,6 +4,21 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * The two shapes of screen the fullscreen overlay has to fit on (issue #20).
+ *
+ * `sm:` is no help there: a phone held sideways is *wider* than the `sm` breakpoint
+ * and barely 360 px tall, and it is the height that everything is short of. It also
+ * has the most crowded picture of all — YouTube's mobile controls put a play cluster
+ * in the middle and a progress bar along the bottom — so `tight` is where our
+ * controls shrink and fold into the left third.
+ *
+ * The gap between 30 and 32 rem is deliberate: nothing is half a phone in landscape,
+ * and leaving it empty is what keeps the two from ever applying at once.
+ */
+@custom-variant tight (@media (pointer: coarse) and (max-height: 30rem));
+@custom-variant roomy (@media (min-width: 40rem) and (min-height: 32rem));
+
 :root {
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.141 0.005 285.823);

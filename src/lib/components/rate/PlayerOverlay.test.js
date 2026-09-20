@@ -196,12 +196,14 @@ describe('PlayerOverlay', () => {
 		expect(open).toContain('animate-pulse');
 		expect(open).toContain('role="status"');
 		expect(open).toContain('Finished');
-		// `sr-only` is out of flow, so the box is still the size of the button.
-		expect(open).toContain('sr-only');
+		// `sr-only` is out of flow, so the box is still the size of the button. Matched
+		// as the whole attribute: the title carries a `tight:sr-only` of its own, which
+		// is a layout rule for phones in landscape and not a second announcement.
+		expect(open).toContain('class="sr-only"');
 
 		// Expanded there is exactly one of those notes, and it is the visible one.
 		const up = html({ awaitingRating: true, title: 'Some video' });
-		expect(up).not.toContain('sr-only');
+		expect(up).not.toContain('class="sr-only"');
 		expect(up.match(/role="status"/g)).toHaveLength(1);
 	});
 
