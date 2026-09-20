@@ -47,15 +47,6 @@
 	/** @type {boolean} The player's own wrapper is the browser's fullscreen element. */
 	let fullscreen = $state(false);
 
-	/** @type {boolean} Whether the fullscreen overlay is currently shown. */
-	let overlayVisible = $state(true);
-
-	/** @type {ReturnType<typeof setTimeout>|undefined} */
-	let overlayTimer;
-
-	/** How long the fullscreen overlay stays up after the last sign of life. */
-	const OVERLAY_IDLE_MS = 2200;
-
 	/** @type {string|null} Video the fullscreen request was already made for. */
 	let fullscreenFor = null;
 
@@ -136,29 +127,18 @@
 	});
 
 	/**
-	 * Entering fullscreen shows the overlay and starts its idle countdown; leaving
-	 * puts it back to "shown", so the next fullscreen does not start faded out.
-	 */
-	$effect(() => {
-		if (fullscreen) keepOverlayUp();
-		else {
-			clearTimeout(overlayTimer);
-			overlayVisible = true;
-		}
-	});
-
-	$effect(() => () => clearTimeout(overlayTimer));
-
-	/**
-	 * Show the fullscreen overlay and restart the countdown that hides it again.
+	 * Tuck the fullscreen overlay away, or bring it back (issue #19).
+	 *
+	 * Fullscreen only: outside it the overlay is not rendered at all, and flipping the
+	 * setting from under a page that shows nothing of it would be a shortcut with no
+	 * visible effect. The state itself lives in the device settings, so it survives
+	 * the next video, the next fullscreen and a reload.
+	 *
 	 * @returns {void}
 	 */
-	function keepOverlayUp() {
-		overlayVisible = true;
-		clearTimeout(overlayTimer);
-		overlayTimer = setTimeout(() => {
-			overlayVisible = false;
-		}, OVERLAY_IDLE_MS);
+	function toggleOverlay() {
+		if (!fullscreen) return;
+		settings.overlayCollapsed = !settings.overlayCollapsed;
 	}
 
 	/**
@@ -174,16 +154,15 @@
 	}
 
 	/**
-	 * Run something the fullscreen overlay asked for: keep the controls up and hand
-	 * the keyboard back, so the next keystroke is a shortcut again and not something
-	 * the button that was just clicked answers.
+	 * Run something the fullscreen overlay asked for and hand the keyboard back, so
+	 * the next keystroke is a shortcut again and not something the button that was
+	 * just clicked answers.
 	 *
 	 * @param {() => void} action
 	 * @returns {void}
 	 */
 	function overlayAction(action) {
 		action();
-		keepOverlayUp();
 		recoverFocus();
 	}
 
@@ -283,7 +262,6 @@
 	/** @returns {void} */
 	function handleEnded() {
 		if (!current) return;
-		if (fullscreen) keepOverlayUp();
 
 		const rated = current.rating !== null;
 		const action = endedAction({ loop: settings.loop, rated, autoAdvance: settings.autoAdvance });
@@ -360,7 +338,6 @@
 		// able to close the very list it opened.
 		if (!shortcutsEnabled(event, document) && !(action.type === 'help' && helpOpen)) return;
 		event.preventDefault();
-		if (fullscreen) keepOverlayUp();
 
 		switch (action.type) {
 			case 'rate':
@@ -392,6 +369,9 @@
 				break;
 			case 'loop':
 				toggleLoop();
+				break;
+			case 'toggleOverlay':
+				toggleOverlay();
 				break;
 			case 'help':
 				helpOpen = !helpOpen;
@@ -451,7 +431,7 @@
 						<PlayerOverlay
 							rating={current.rating}
 							title={current.title}
-							visible={overlayVisible}
+							collapsed={settings.overlayCollapsed}
 							{awaitingRating}
 							canPrevious={session.hasPrevious}
 							canNext={session.hasNext}
@@ -462,7 +442,7 @@
 							onnext={() => overlayAction(() => session.next())}
 							onundo={() => overlayAction(undo)}
 							onexit={() => player?.exitFullscreen()}
-							onactivity={keepOverlayUp}
+							ontoggle={() => overlayAction(toggleOverlay)}
 						/>
 					{/if}
 				</Player>

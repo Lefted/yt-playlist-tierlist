@@ -302,6 +302,7 @@ Defaults — the letters, with `f` left to YouTube:
 | `R`                                     | Replay from the start                 |
 | `U`, `Backspace`, `Ctrl`+`Z` or `⌘`+`Z` | Undo the last rating                  |
 | `Shift`+`L`                             | Loop the current video                |
+| `Shift`+`H`                             | Hide / show the fullscreen controls   |
 | `?`                                     | Show the shortcut list                |
 
 Every YouTube key therefore keeps its meaning by default; the F tier is the one
@@ -341,11 +342,14 @@ The stack lives in memory and belongs to the active playlist.
 
 **Fullscreen** puts the app's own player wrapper on the screen, not the YouTube
 iframe — that is what keeps the keyboard on our side of the origin boundary. A
-compact overlay (tiers, previous/skip, undo, leave fullscreen) fades in and out
-in the top left while it is up — clear of the browser's "exit full screen" pill
-and of the embed's own volume, captions and settings buttons, which stay
-clickable. Using YouTube's own fullscreen button instead fullscreens the iframe,
-and then the shortcuts belong to YouTube again.
+compact overlay (tiers, previous/skip, undo, leave fullscreen) sits in the top
+left the whole time it is up — clear of the browser's "exit full screen" pill and
+of the embed's own volume, captions and settings buttons, which stay clickable.
+It does not fade out on its own: the eye button at its left edge (or `Shift`+`H`)
+shrinks it down to just that button and back, and which of the two it is on is
+remembered on the device, across videos and reloads. Using YouTube's own
+fullscreen button instead fullscreens the iframe, and then the shortcuts belong
+to YouTube again.
 
 ## Install as an app (PWA)
 
@@ -373,14 +377,14 @@ page under you mid-video.
 Your library lives in the server's Postgres, one library per account. Only the
 preferences of the machine in front of you stay in `localStorage`:
 
-| Where                                     | Contents                                                                                                         |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `playlists` (Postgres)                    | One row per imported playlist per account: its YouTube id, title, channel, thumbnail and the playback order      |
-| `videos` (Postgres)                       | One row per video of a playlist: title, channel, duration, its tier, whether it is unplayable, when it was rated |
-| `user_state` (Postgres)                   | Which playlist the account is working on                                                                         |
-| `users`, `sessions`, `invites` (Postgres) | The account itself (see [Accounts](#accounts))                                                                   |
-| `ytpt:v1:settings`                        | _skip rated_, _auto-advance_, _fullscreen on play_, _loop_, _keyboard shortcuts_ (on/off) and the keybindings    |
-| `ytpt:v1:library.migrated`                | Nothing the app reads — a copy of the pre-accounts library, kept after it was imported (see below)               |
+| Where                                     | Contents                                                                                                                                                   |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `playlists` (Postgres)                    | One row per imported playlist per account: its YouTube id, title, channel, thumbnail and the playback order                                                |
+| `videos` (Postgres)                       | One row per video of a playlist: title, channel, duration, its tier, whether it is unplayable, when it was rated                                           |
+| `user_state` (Postgres)                   | Which playlist the account is working on                                                                                                                   |
+| `users`, `sessions`, `invites` (Postgres) | The account itself (see [Accounts](#accounts))                                                                                                             |
+| `ytpt:v1:settings`                        | _skip rated_, _auto-advance_, _fullscreen on play_, _loop_, _keyboard shortcuts_ (on/off), the keybindings and whether the fullscreen overlay is collapsed |
+| `ytpt:v1:library.migrated`                | Nothing the app reads — a copy of the pre-accounts library, kept after it was imported (see below)                                                         |
 
 That split is deliberate: ratings are about the playlist and should follow you to
 the next device; which key rates an S and whether a video should go fullscreen are
