@@ -8,7 +8,9 @@
  * cannot answer, and pinning the placement classes would only restate them; what it
  * covers is structural, and that is what this file holds down.
  *
- * Since #19 the overlay also collapses into its eye button, and the same applies:
+ * Since #19 the overlay also collapses into its eye button — and since #20 it fades
+ * out again after a few idle seconds, which is a second, independent way of being
+ * out of reach. The same applies:
  * whether the shrinking *looks* smooth is a browser question, but that it is a size
  * change rather than a fade, and that the hidden controls are out of reach while it
  * is collapsed, are both readable off the markup. "Out of reach" is asserted as
@@ -25,8 +27,8 @@ import PlayerOverlay from './PlayerOverlay.svelte';
 const CONTROLS = ['S tier', 'F tier', 'Previous', 'Skip', 'Undo', 'Leave fullscreen'];
 
 /**
- * @param {{ collapsed?: boolean, title?: string, awaitingRating?: boolean,
- *   shortcuts?: boolean }} [props] - Everything else is a stub.
+ * @param {{ collapsed?: boolean, visible?: boolean, title?: string,
+ *   awaitingRating?: boolean, shortcuts?: boolean }} [props] - Everything else is a stub.
  * @returns {string} The overlay's server-rendered HTML.
  */
 function html(props = {}) {
@@ -201,6 +203,39 @@ describe('PlayerOverlay', () => {
 		const up = html({ awaitingRating: true, title: 'Some video' });
 		expect(up).not.toContain('sr-only');
 		expect(up.match(/role="status"/g)).toHaveLength(1);
+	});
+
+	it('fades out without leaving the screen, so the pointer can still find it', () => {
+		// The idle hide of #20. `opacity-0` rather than an `{#if}`: the box has to stay
+		// where it is to hear the mouse arriving on it or a finger tapping it, which is
+		// how it comes back. Whoever sends the events is the Rate page's business.
+		const [box] = outermostTags(html({ visible: false, title: 'Some video' }));
+
+		expect(box).toContain('opacity-0');
+		expect(box).not.toMatch(/\binert(=|\s|>)/);
+		expect(box).not.toContain('pointer-events-none');
+	});
+
+	it('puts everything, the eye included, out of reach while it is faded out', () => {
+		// Nothing invisible may be clicked or tabbed to — and unlike the collapsed
+		// state, that goes for the eye button too: there is nothing on screen to aim at.
+		const open = reachable(html({ visible: false, title: 'Some video' }));
+
+		for (const label of [...CONTROLS, 'Hide controls']) {
+			expect(open, label).not.toContain(`aria-label="${label}"`);
+		}
+		expect(open).not.toContain('Some video');
+	});
+
+	it('is the eye that fades when it is collapsed as well', () => {
+		// Collapsed the box *is* the button, so the two states stack rather than fight:
+		// the eye fades out, and waking brings back the eye, not the controls.
+		const markup = html({ visible: false, collapsed: true, title: 'Some video' });
+		const [box] = outermostTags(markup);
+
+		expect(box).toContain('opacity-0');
+		expect(box).toContain('p-0');
+		expect(reachable(markup)).not.toContain('aria-label="Show controls"');
 	});
 
 	it('collapses by changing size, not by fading out', () => {

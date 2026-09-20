@@ -21,13 +21,21 @@
 	 * The group is the only hit target: it has no container to swallow clicks meant
 	 * for the video.
 	 *
-	 * **It never fades away on its own** (issue #19). It used to disappear after a
-	 * couple of idle seconds and come back on a pointer move, which on a phone left it
-	 * unreachable for good: a tap barely moves the pointer, and a tap on the video goes
-	 * to the cross-origin iframe and never reaches us. Whether the controls are up is
-	 * therefore the user's decision, taken with the eye button and remembered in
-	 * `settings.overlayCollapsed`. Collapsed, the box shrinks to exactly that button —
-	 * same corner, same backdrop, so the eye *is* the overlay until it is pressed again.
+	 * Two different things take it off the screen, and neither replaces the other:
+	 *
+	 * - **`collapsed`** is the user's standing choice (issue #19), taken with the eye
+	 *   button and remembered in `settings.overlayCollapsed`. Collapsed, the box shrinks
+	 *   to exactly that button — same corner, same backdrop, so the eye *is* the overlay
+	 *   until it is pressed again.
+	 * - **`visible`** is the last few seconds (issue #20): the overlay fades out when
+	 *   nothing happens, about when YouTube's own controls do, and comes back with them.
+	 *   Faded out it is `opacity-0` and everything inside is `inert`, but the box still
+	 *   hears the pointer — moving onto it, or tapping it, is one of the ways back. The
+	 *   *page* is what decides: most of the signals that count as a sign of life arrive
+	 *   nowhere near this component (`overlay-visibility.js`).
+	 *
+	 * Collapsed *and* faded, the eye is what fades out; waking brings back the eye, not
+	 * the controls.
 	 */
 	import Eye from '@lucide/svelte/icons/eye';
 	import EyeOff from '@lucide/svelte/icons/eye-off';
@@ -45,6 +53,13 @@
 	 * @property {import('$lib/types.js').Rating|null} rating - The current video's rating.
 	 * @property {(rating: import('$lib/types.js').Rating) => void} onrate
 	 * @property {boolean} [collapsed] - Tucked away into the eye button.
+	 * @property {boolean} [visible] - Faded out after a while of nothing happening; the
+	 *   box still reports the pointer, which is one of the ways back.
+	 * @property {() => void} [onactivity] - The pointer is on the box: somebody is
+	 *   there, keep the controls up.
+	 * @property {() => void} [onpointerin] - The pointer arrived on the box — it must
+	 *   not fade under the hand that is reaching for it.
+	 * @property {() => void} [onpointerout] - …and left again.
 	 * @property {boolean} [awaitingRating] - The video ended unrated.
 	 * @property {boolean} [canPrevious]
 	 * @property {boolean} [canNext]
@@ -68,6 +83,7 @@
 		rating,
 		onrate,
 		collapsed = false,
+		visible = true,
 		awaitingRating = false,
 		canPrevious = true,
 		canNext = true,
@@ -80,8 +96,18 @@
 		onnext,
 		onundo,
 		onexit,
-		ontoggle
+		ontoggle,
+		onactivity,
+		onpointerin,
+		onpointerout
 	} = $props();
+
+	/**
+	 * Out of reach, whichever of the two took it away: collapsed into the eye, or
+	 * faded out. `inert` is what the browser enforces it with — no clicks, no `Tab`,
+	 * and `aria-hidden` beside it for the screen reader.
+	 */
+	const folded = $derived(collapsed || !visible);
 
 	/** @type {{ id: string, label: string, icon: any, onclick: () => void, disabled?: boolean }[]} */
 	const buttons = $derived([
@@ -140,8 +166,8 @@
 				'min-h-0 min-w-0 overflow-hidden transition-opacity duration-200 motion-reduce:transition-none',
 				collapsed && 'opacity-0'
 			)}
-			inert={collapsed}
-			aria-hidden={collapsed}
+			inert={folded}
+			aria-hidden={folded}
 		>
 			{@render content()}
 		</div>
@@ -215,8 +241,9 @@
 {/snippet}
 
 <!--
-	The box is the only thing this component paints, so a click anywhere else on the
-	video reaches the player. Its backdrop is what keeps the buttons readable now that
+	The box is not a control itself — it only notices that the pointer is around, hence
+	the `svelte-ignore` below. It is also the only thing this component paints, so a
+	click anywhere else on the video reaches the player. Its backdrop is what keeps the buttons readable now that
 	the page-wide gradient is gone.
 
 	The `max-w` is the right-hand budget of the header comment: 15 rem minus the left
@@ -228,14 +255,26 @@
 
 	Its padding goes with the content: collapsed, the box has to be the 44 px button
 	and nothing more, so the padding animates away alongside the two regions.
+
+	Faded out it is only `opacity-0`: the box is still there and still hears the
+	pointer, which is how a mouse arriving on it — or a finger tapping where it was —
+	brings it back. Its content is `inert` meanwhile, so nothing invisible can be
+	clicked or tabbed to. `pointerdown` as well as `pointermove`, because a tap moves
+	a pointer by almost nothing.
 -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class={cn(
 		'absolute top-24 left-3 z-10 flex w-fit max-w-[calc(100%-1.5rem)] flex-col items-start',
 		'rounded-xl bg-black/60 backdrop-blur',
-		'transition-[padding] duration-200 ease-out motion-reduce:transition-none',
-		collapsed ? 'p-0' : 'p-2 sm:p-3'
+		'transition-[padding,opacity] duration-200 ease-out motion-reduce:transition-none',
+		collapsed ? 'p-0' : 'p-2 sm:p-3',
+		!visible && 'opacity-0'
 	)}
+	onpointermove={onactivity}
+	onpointerdown={onactivity}
+	onpointerenter={onpointerin}
+	onpointerleave={onpointerout}
 >
 	{#if title}
 		{@render region(titleRegion, videoTitle)}
@@ -256,6 +295,8 @@
 			aria-label={toggleLabel}
 			title={toggleKey ? `${toggleLabel} (${toggleKey})` : toggleLabel}
 			onclick={ontoggle}
+			inert={!visible}
+			aria-hidden={!visible}
 			class={cn(
 				TIER_BUTTON_BASE,
 				ICON_BUTTON,

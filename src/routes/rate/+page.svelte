@@ -6,6 +6,7 @@
 	 * we are in it belongs to `session`, and every rating goes straight into
 	 * `library`, which persists it.
 	 */
+	import { untrack } from 'svelte';
 	import { afterNavigate, replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -18,10 +19,17 @@
 	import NowPlaying from '$lib/components/rate/NowPlaying.svelte';
 	import PlaybackControls from '$lib/components/rate/PlaybackControls.svelte';
 	import PlayerOverlay from '$lib/components/rate/PlayerOverlay.svelte';
+	import PointerWake from '$lib/components/rate/PointerWake.svelte';
 	import SessionSummary from '$lib/components/rate/SessionSummary.svelte';
 	import SessionToolbar from '$lib/components/rate/SessionToolbar.svelte';
 	import TierBar from '$lib/components/rate/TierBar.svelte';
 	import { parseRateParams, rateQuery } from '$lib/components/rate/params.js';
+	import {
+		canHide,
+		OVERLAY_IDLE_MS,
+		OVERLAY_SHOWN,
+		overlayAfter
+	} from '$lib/components/rate/overlay-visibility.js';
 	import { awaitsRating, endedAction } from '$lib/components/rate/playback.js';
 	import { shortcutFor, shortcutsEnabled } from '$lib/components/rate/shortcuts.js';
 	import { describeUndo } from '$lib/components/rate/undo.js';
@@ -49,6 +57,21 @@
 
 	/** @type {string|null} Video the fullscreen request was already made for. */
 	let fullscreenFor = null;
+
+	/**
+	 * @type {import('$lib/components/rate/overlay-visibility.js').OverlayVisibility}
+	 * Whether the fullscreen overlay is on screen, and whether the pointer is on it.
+	 * `raw`, because the machine hands out a whole new state each time and the identity
+	 * of that state is what re-arms the countdown below.
+	 */
+	let overlay = $state.raw(OVERLAY_SHOWN);
+
+	/**
+	 * @type {boolean} Something needs the overlay to stay up however long nothing
+	 * happens: a video that ended unrated — the prompt to rate it *is* the overlay —
+	 * or a dialog of ours layered on top.
+	 */
+	const overlayHeld = $derived(awaitingRating || helpOpen);
 
 	const current = $derived(session.currentVideo);
 	const playing = $derived(playerState === PLAYER_STATE.PLAYING);
@@ -120,6 +143,64 @@
 		session.clearUndo();
 	});
 
+	/**
+	 * Entering fullscreen starts the overlay shown and counting; leaving puts it back
+	 * to shown, so the next entry does not begin mid-fade.
+	 *
+	 * `untrack`, because the dispatch below both reads and writes `overlay`, and this
+	 * effect is only ever about `fullscreen` changing.
+	 */
+	$effect(() => {
+		const entered = fullscreen;
+		untrack(() => overlayEvent(entered ? 'wake' : 'reset'));
+	});
+
+	/**
+	 * The countdown that fades the overlay out, about when YouTube's own controls go.
+	 *
+	 * An effect rather than a `setTimeout` next to each wake, so that *every* input
+	 * re-arms it on its own: a new state from any sign of life, the pointer arriving on
+	 * the box, `awaitingRating` coming and going, fullscreen ending. There is no timer
+	 * running while the overlay must stay up, so `idle` can never race a hold.
+	 */
+	$effect(() => {
+		if (!fullscreen || !canHide(overlay, { held: overlayHeld })) return;
+
+		const timer = setTimeout(() => overlayEvent('idle'), OVERLAY_IDLE_MS);
+		return () => clearTimeout(timer);
+	});
+
+	/**
+	 * Feed the overlay's state machine, and act on the one transition the page owes it.
+	 *
+	 * @param {import('$lib/components/rate/overlay-visibility.js').OverlayEvent} event
+	 * @returns {void}
+	 */
+	function overlayEvent(event) {
+		const before = overlay;
+		overlay = overlayAfter(before, event, { held: overlayHeld });
+
+		// A tap on the video hands the keyboard to the iframe, and we want it back — but
+		// not at the moment of the tap: taking the focus out from under YouTube's own
+		// menus while they are opening is what issue #9 already learned to avoid. The end
+		// of the countdown is the quiet moment to do it, and it leaves the *next* tap
+		// free to announce itself as another `blur`.
+		if (before.visible && !overlay.visible) recoverFocus();
+	}
+
+	/**
+	 * The focus left our document.
+	 *
+	 * On a touch screen that is the only trace of a tap on the video we ever get: the
+	 * iframe is cross-origin and swallows every event inside it, but moving the focus
+	 * into it makes the window lose the focus, and that we can hear.
+	 *
+	 * @returns {void}
+	 */
+	function handleWindowBlur() {
+		if (fullscreen) overlayEvent('wake');
+	}
+
 	/** A new video starts unjudged; drop the "it ended" highlight. */
 	$effect(() => {
 		void current?.id;
@@ -163,6 +244,7 @@
 	 */
 	function overlayAction(action) {
 		action();
+		overlayEvent('wake');
 		recoverFocus();
 	}
 
@@ -262,6 +344,7 @@
 	/** @returns {void} */
 	function handleEnded() {
 		if (!current) return;
+		if (fullscreen) overlayEvent('wake');
 
 		const rated = current.rating !== null;
 		const action = endedAction({ loop: settings.loop, rated, autoAdvance: settings.autoAdvance });
@@ -339,6 +422,10 @@
 		if (!shortcutsEnabled(event, document) && !(action.type === 'help' && helpOpen)) return;
 		event.preventDefault();
 
+		// Whatever the key does, pressing one is a sign of life — and a rating key has
+		// feedback to show on the overlay it would otherwise be hidden behind.
+		if (fullscreen) overlayEvent('wake');
+
 		switch (action.type) {
 			case 'rate':
 				rate(action.rating);
@@ -384,7 +471,7 @@
 	<title>Rate · YT Tierlist</title>
 </svelte:head>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} onblur={handleWindowBlur} />
 
 {#if library.loading}
 	<div class="mx-auto flex w-full max-w-xl flex-1 items-center p-4">
@@ -432,6 +519,7 @@
 							rating={current.rating}
 							title={current.title}
 							collapsed={settings.overlayCollapsed}
+							visible={overlay.visible}
 							shortcuts={settings.shortcuts}
 							keybindings={settings.keybindings}
 							{awaitingRating}
@@ -445,7 +533,20 @@
 							onundo={() => overlayAction(undo)}
 							onexit={() => player?.exitFullscreen()}
 							ontoggle={() => overlayAction(toggleOverlay)}
+							onactivity={() => overlayEvent('wake')}
+							onpointerin={() => overlayEvent('enter')}
+							onpointerout={() => overlayEvent('leave')}
 						/>
+
+						<!--
+							The mouse user's way back to a faded overlay: moving over the video
+							brings YouTube's controls back, and nothing of that movement reaches us
+							through a cross-origin iframe. The layer is only there while the overlay
+							is away, and never on a touch screen — see the component.
+						-->
+						{#if !overlay.visible}
+							<PointerWake onwake={() => overlayEvent('wake')} />
+						{/if}
 					{/if}
 				</Player>
 			</div>
