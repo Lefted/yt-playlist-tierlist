@@ -410,16 +410,28 @@ one. Until it exists, do not put anything in this app you would mind losing.
 
 ## Troubleshooting
 
-| Symptom                                      | Likely cause                                                                                                                                                   |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kubectl` hangs                              | WireGuard tunnel down. Activate `hygames-eu-vps`.                                                                                                              |
-| `podman push` fails, connection refused      | SSH tunnel not running, or the podman machine is not on mirrored networking (§8).                                                                              |
-| Pods `ImagePullBackOff`                      | The tag in `app.yaml` was never pushed. Run `scripts/deploy.sh`, don't hand-edit the tag.                                                                      |
-| Pods `CrashLoopBackOff` right after a deploy | Usually `DATABASE_URL`: check the percent-encoding of the password. `kubectl -n amv logs -l app=amv-tierlist`.                                                 |
-| Rollout stalls, old pods keep serving        | Working as designed — the new pod never went Ready. Read its logs; nothing has been taken away from users.                                                     |
-| `Certificate` stuck `Ready: False`           | Cloudflare token missing, expired or wrongly scoped (needs `Zone:DNS:Edit` **and** `Zone:Zone:Read`).                                                          |
-| `ERR_TOO_MANY_REDIRECTS`                     | Cloudflare SSL mode is _Flexible_. Set **Full (strict)** (§2a).                                                                                                |
-| Cloudflare 521 / 522 / 525                   | 521 origin down · 522 origin unreachable from Cloudflare (firewall) · 525 TLS handshake failed (certificate not issued yet, or SSL mode is not Full (strict)). |
-| HTTP does not redirect to HTTPS              | **Always Use HTTPS** off at the edge, or the Middleware annotation lost its namespace prefix (`amv-redirect-to-https@kubernetescrd`).                          |
-| Traefik returns 404 on `:443`                | Host mismatch in the Ingress rule, or the `websecure` entrypoint is not exposed.                                                                               |
-| POSTs return 403                             | `ORIGIN` does not match the public URL. It is set in `app.yaml`, not in the Secret.                                                                            |
+| Symptom                                                                   | Likely cause                                                                                                                                                      |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kubectl` hangs                                                           | WireGuard tunnel down. Activate `hygames-eu-vps`.                                                                                                                 |
+| `podman push` fails, connection refused                                   | SSH tunnel not running, or the podman machine is not on mirrored networking (§8).                                                                                 |
+| Pods `ImagePullBackOff`                                                   | The tag in `app.yaml` was never pushed. Run `scripts/deploy.sh`, don't hand-edit the tag.                                                                         |
+| Pods `CrashLoopBackOff` right after a deploy                              | Usually `DATABASE_URL`: check the percent-encoding of the password. `kubectl -n amv logs -l app=amv-tierlist`.                                                    |
+| Rollout stalls, old pods keep serving                                     | Working as designed — the new pod never went Ready. Read its logs; nothing has been taken away from users.                                                        |
+| `Certificate` stuck `Ready: False`                                        | Cloudflare token missing, expired or wrongly scoped (needs `Zone:DNS:Edit` **and** `Zone:Zone:Read`).                                                             |
+| `ERR_TOO_MANY_REDIRECTS`                                                  | Cloudflare SSL mode is _Flexible_. Set **Full (strict)** (§2a).                                                                                                   |
+| Cloudflare 521 / 522 / 525                                                | 521 origin down · 522 origin unreachable from Cloudflare (firewall) · 525 TLS handshake failed (certificate not issued yet, or SSL mode is not Full (strict)).    |
+| HTTP does not redirect to HTTPS                                           | **Always Use HTTPS** off at the edge, or the Middleware annotation lost its namespace prefix (`amv-redirect-to-https@kubernetescrd`).                             |
+| Traefik returns 404 on `:443`                                             | Host mismatch in the Ingress rule, or the `websecure` entrypoint is not exposed.                                                                                  |
+| POSTs return 403                                                          | `ORIGIN` does not match the public URL. It is set in `app.yaml`, not in the Secret.                                                                               |
+| Deploy is live but clients stay on the old version, no "Update available" | `/sw.js` was served from Cloudflare's cache (`cf-cache-status: HIT`). The `sw-no-cache` Middleware in `ingress.yaml` prevents it; purge the URL once (see below). |
+
+### A stale service worker after a deploy
+
+The browser's service-worker update check bypasses its own HTTP cache but not
+Cloudflare's. `ingress.yaml` therefore answers `/sw.js` with `Cache-Control:
+no-cache, must-revalidate`, which Cloudflare honours by not caching the file at
+all (#21). If a copy is already cached (`curl -sI https://amv.lefted.dev/sw.js`
+shows `cf-cache-status: HIT` and an old `etag`), evict it once in the
+dashboard: **Caching → Configuration → Custom Purge → URL**
+`https://amv.lefted.dev/sw.js`. Clients pick up the new worker on their next
+visit and show the "Update available" toast.

@@ -44,3 +44,56 @@ spec:
                 name: amv-tierlist
                 port:
                   number: 80
+---
+# The service worker must never be served from a CDN cache.
+#
+# adapter-node sets Cache-Control only for the hashed files under
+# /_app/immutable/. /sw.js has a fixed name and no header, so Cloudflare falls
+# back to caching it by extension (.js) for hours. A browser's service-worker
+# update check bypasses its own HTTP cache but not the edge's, so after a deploy
+# every client kept the old worker, and the old worker kept answering
+# navigations with its precached old shell (#21). `no-cache` at the origin is
+# what Cloudflare honours; it also keeps the file revalidated by any other
+# proxy in between.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: sw-no-cache
+  namespace: amv
+spec:
+  headers:
+    customResponseHeaders:
+      Cache-Control: 'no-cache, must-revalidate'
+---
+# A second Ingress because middlewares are attached per Ingress, not per path.
+# Everything else still goes through the first Ingress unchanged.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: amv-sw
+  namespace: amv
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    # Without this, Traefik ranks routers by rule length, and
+    # `Host(...) && PathPrefix(`/`)` is one character longer than
+    # `Host(...) && Path(`/sw.js`)`, so the catch-all above would win.
+    traefik.ingress.kubernetes.io/router.priority: '100'
+    traefik.ingress.kubernetes.io/router.middlewares: amv-redirect-to-https@kubernetescrd,amv-sw-no-cache@kubernetescrd
+    traefik.ingress.kubernetes.io/router.tls: 'true'
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - amv.lefted.dev
+      secretName: lefted-wildcard-tls
+  rules:
+    - host: amv.lefted.dev
+      http:
+        paths:
+          - path: /sw.js
+            pathType: Exact
+            backend:
+              service:
+                name: amv-tierlist
+                port:
+                  number: 80
